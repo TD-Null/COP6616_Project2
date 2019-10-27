@@ -527,195 +527,99 @@ class ShiftOp<T>
 		{
 			i++;
 			
-			if(i == this.pos + 1)
+			if(((Descriptor<T>) last).shift.value == null)
 			{
-				if(((Descriptor<T>) last).shift.value == null)
-				{
-					this.incomplete.set(false);
-				}
-				
-				failures = 0;
-				
-				while(((Descriptor<T>) last).shift.next.get() == null)
-				{
-					if(failures++ == this.vec.limit)
-					{
-						//this.vec.announceOp(this);
-						return;
-					}
-					
-					Object cvalue;
-					
-					if(!this.vec.segmented_contiguous)
-					{
-						SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-						cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
-						
-						if(cvalue instanceof Descriptor)
-						{
-							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
-							{
-								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
-							}
-							
-							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
-							{
-								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
-							}
-							
-							((Descriptor<T>) cvalue).complete();
-						}
-						
-						else
-						{
-							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
-							
-							if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
-							{
-								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
-								
-								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
-								{
-									this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
-								}
-							}
-						}
-					}
-					
-					else
-					{
-						int spot = this.vec.conStorage.getSpot(this.pos);
-						cvalue = this.vec.conStorage.array.get(spot).getReference();
-						
-						if(cvalue instanceof Descriptor)
-						{
-							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
-							{
-								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
-							}
-							
-							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
-							{
-								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
-							}
-							
-							((Descriptor<T>) cvalue).complete();
-						}
-						
-						else
-						{
-							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
-							
-							if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
-							{
-								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
-								
-								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
-								{
-									this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
-								}
-							}
-						}
-					}
-				}
-				
-				last = ((Descriptor<T>) last).shift.next.get();
+				this.incomplete.set(false);
 			}
 			
-			else
+			failures = 0;
+			
+			while(((Descriptor<T>) last).shift.next.get() == null)
 			{
-				if(((ShiftDescr<T>) last).value == null)
+				if(failures++ == this.vec.limit)
 				{
-					this.incomplete.set(false);
+					//this.vec.announceOp(this);
+					return;
 				}
 				
-				failures = 0;
+				Object cvalue;
 				
-				while(((ShiftDescr<T>) last).next.get() == null)
+				if(!this.vec.segmented_contiguous)
 				{
-					if(failures++ == this.vec.limit)
-					{
-						//this.vec.announceOp(this);
-						return;
-					}
+					SegSpot spot = this.vec.segStorage.getSpot(this.pos);
+					cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
 					
-					Object cvalue;
-					
-					if(!this.vec.segmented_contiguous)
+					if(cvalue instanceof Descriptor)
 					{
-						SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-						cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
-						
-						if(cvalue instanceof Descriptor)
+						if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
 						{
-							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
-							{
-								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
-							}
-							
-							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
-							{
-								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
-							}
-							
-							((Descriptor<T>) cvalue).complete();
+							((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
 						}
 						
-						else
+						else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
 						{
-							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
-							
-							if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
-							{
-								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
-								
-								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
-								{
-									this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
-								}
-							}
+							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
 						}
+						
+						((Descriptor<T>) cvalue).complete();
 					}
 					
 					else
 					{
-						int spot = this.vec.conStorage.getSpot(this.pos);
-						cvalue = this.vec.conStorage.array.get(spot).getReference();
+						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
 						
-						if(cvalue instanceof Descriptor)
+						if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 						{
-							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
-							{
-								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
-							}
+							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
 							
-							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
 							{
-								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
-							}
-							
-							((Descriptor<T>) cvalue).complete();
-						}
-						
-						else
-						{
-							Descriptor<T> sh = new Descriptor<T>(this, (ShiftDescr<T>) last, (Node<T>) cvalue, i);
-							
-							if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
-							{
-								((ShiftDescr<T>) last).next.compareAndSet(null, sh.shift);
-								
-								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
-								{
-									this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
-								}
+								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
 							}
 						}
 					}
 				}
 				
-				last = ((ShiftDescr<T>) last).next.get();
+				else
+				{
+					int spot = this.vec.conStorage.getSpot(this.pos);
+					cvalue = this.vec.conStorage.array.get(spot).getReference();
+					
+					if(cvalue instanceof Descriptor)
+					{
+						if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
+						{
+							((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+						}
+						
+						else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+						{
+							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+						}
+						
+						((Descriptor<T>) cvalue).complete();
+					}
+					
+					else
+					{
+						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						
+						if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+						{
+							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
+							
+							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+							{
+								this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+							}
+						}
+					}
+				}
 			}
+			
+			ShiftDescr<T> newShift = ((Descriptor<T>) last).shift.next.get();
+
+			last = new Descriptor<T>(newShift.op, newShift.prev, newShift.value, newShift.pos);
 		}
 	}
 	

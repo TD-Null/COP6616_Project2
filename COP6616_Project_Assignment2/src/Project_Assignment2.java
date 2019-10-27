@@ -1,6 +1,6 @@
 /*
  * Timothy Deligero, Viktor Orlorvic, Cody Dailidonis
- * Course: CO6616 (Multicore Programming)
+ * Course: COP6616 (Multicore Programming)
  * Project Assignment #2
  */
 
@@ -414,7 +414,7 @@ class ShiftOp<T>
 {
 	Vector<T> vec;
 	int pos;
-	AtomicBoolean incomplete;
+	AtomicBoolean incomplete = new AtomicBoolean();
 	AtomicReference<Object> next = new AtomicReference<Object>();
 	
 	boolean shiftType;
@@ -527,97 +527,195 @@ class ShiftOp<T>
 		{
 			i++;
 			
-			if(((ShiftDescr<T>) last).value == null)
+			if(i == this.pos + 1)
 			{
-				this.incomplete.set(false);
-			}
-			
-			failures = 0;
-			
-			while(((ShiftDescr<T>) last).next.get() == null)
-			{
-				if(failures++ == this.vec.limit)
+				if(((Descriptor<T>) last).shift.value == null)
 				{
-					//this.vec.announceOp(this);
-					return;
+					this.incomplete.set(false);
 				}
 				
-				Object cvalue;
+				failures = 0;
 				
-				if(!this.vec.segmented_contiguous)
+				while(((Descriptor<T>) last).shift.next.get() == null)
 				{
-					SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-					cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
-					
-					if(cvalue instanceof Descriptor)
+					if(failures++ == this.vec.limit)
 					{
-						if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
+						//this.vec.announceOp(this);
+						return;
+					}
+					
+					Object cvalue;
+					
+					if(!this.vec.segmented_contiguous)
+					{
+						SegSpot spot = this.vec.segStorage.getSpot(this.pos);
+						cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+						
+						if(cvalue instanceof Descriptor)
 						{
-							((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
+							{
+								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							}
+							
+							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+							{
+								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							}
+							
+							((Descriptor<T>) cvalue).complete();
 						}
 						
-						else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+						else
 						{
-							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+							
+							if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+							{
+								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
+								
+								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+								{
+									this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+								}
+							}
 						}
-						
-						((Descriptor<T>) cvalue).complete();
 					}
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						int spot = this.vec.conStorage.getSpot(this.pos);
+						cvalue = this.vec.conStorage.array.get(spot).getReference();
 						
-						if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+						if(cvalue instanceof Descriptor)
 						{
-							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
-							
-							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
 							{
-								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							}
+							
+							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+							{
+								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							}
+							
+							((Descriptor<T>) cvalue).complete();
+						}
+						
+						else
+						{
+							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+							
+							if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+							{
+								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
+								
+								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+								{
+									this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+								}
 							}
 						}
 					}
 				}
 				
-				else
+				last = ((Descriptor<T>) last).shift.next.get();
+			}
+			
+			else
+			{
+				if(((ShiftDescr<T>) last).value == null)
 				{
-					int spot = this.vec.conStorage.getSpot(this.pos);
-					cvalue = this.vec.conStorage.array.get(spot).getReference();
-					
-					if(cvalue instanceof Descriptor)
+					this.incomplete.set(false);
+				}
+				
+				failures = 0;
+				
+				while(((ShiftDescr<T>) last).next.get() == null)
+				{
+					if(failures++ == this.vec.limit)
 					{
-						if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
+						//this.vec.announceOp(this);
+						return;
+					}
+					
+					Object cvalue;
+					
+					if(!this.vec.segmented_contiguous)
+					{
+						SegSpot spot = this.vec.segStorage.getSpot(this.pos);
+						cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+						
+						if(cvalue instanceof Descriptor)
 						{
-							((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
+							{
+								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							}
+							
+							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+							{
+								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							}
+							
+							((Descriptor<T>) cvalue).complete();
 						}
 						
-						else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+						else
 						{
-							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+							
+							if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+							{
+								((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
+								
+								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+								{
+									this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+								}
+							}
 						}
-						
-						((Descriptor<T>) cvalue).complete();
 					}
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						int spot = this.vec.conStorage.getSpot(this.pos);
+						cvalue = this.vec.conStorage.array.get(spot).getReference();
 						
-						if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+						if(cvalue instanceof Descriptor)
 						{
-							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
-							
-							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+							if(((Descriptor<T>) cvalue).type.equals(Descr.PUSH))
 							{
-								this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+								((Descriptor<T>) cvalue).push.state.compareAndSet(State.UNDECIDED, State.PASSED);
+							}
+							
+							else if(((Descriptor<T>) cvalue).type.equals(Descr.POP))
+							{
+								((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
+							}
+							
+							((Descriptor<T>) cvalue).complete();
+						}
+						
+						else
+						{
+							Descriptor<T> sh = new Descriptor<T>(this, (ShiftDescr<T>) last, (Node<T>) cvalue, i);
+							
+							if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+							{
+								((ShiftDescr<T>) last).next.compareAndSet(null, sh.shift);
+								
+								if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
+								{
+									this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+								}
 							}
 						}
 					}
 				}
+				
+				last = ((ShiftDescr<T>) last).next.get();
 			}
-			
-			last = ((ShiftDescr<T>) last).next.get();
 		}
 	}
 	
@@ -792,7 +890,7 @@ class Segmented<T>
 	 * of the capacity after the memory storage has been expanded.
 	 */
 	int initialCapacity;
-	AtomicInteger currentCapacity;
+	AtomicInteger currentCapacity = new AtomicInteger();
 	Vector<T> vec;
 	
 	// Contains the list of array segments containing the memory storage.
@@ -810,11 +908,11 @@ class Segmented<T>
 		this.vec = vec;
 		initialCapacity = capacity;
 		currentCapacity.set(capacity);
-		segments.set(0, (AtomicReferenceArray<Object>) new AtomicReferenceArray<Object>(currentCapacity.get()));
+		segments.set(0, new AtomicReferenceArray<Object>(currentCapacity.get()));
 		
 		for(int i = 0; i < currentCapacity.get(); i++)
 		{
-			segments.get(0).set(0, vec.NotValue_Elem);
+			segments.get(0).set(i, this.vec.NotValue_Elem);;
 		}
 	}
 	
@@ -908,6 +1006,11 @@ class Contiguous<T>
 		this.old = old;
 		this.vec = vec;
 		array = new AtomicReferenceArray<AtomicMarkableReference<Object>>(capacity);
+		
+		for(int i = 0; i < this.capacity; i++)
+		{
+			array.set(i, new AtomicMarkableReference<Object>(this.vec.NotValue_Elem, false));
+		}
 	}
 	
 	/*
@@ -1789,16 +1892,16 @@ public class Project_Assignment2
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 150000;
+	public static int max_operations = 10000;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
-	public static int population = 50000;
+	public static int population = 500;
 	
 	// Contains a boolean value to signify either using segmented or contiguous memory in the Vector object.
-	public static boolean segmented_contiguous = true;
+	public static boolean segmented_contiguous = false;
 	
 	// Contains the initial capacity to be used when allocating a new Vector object.
-	public static int capacity = 100;
+	public static int capacity = 1024;
 	
 	// Contains the Vector object to be accessed by multiple threads.
 	public static Vector<Integer> vector;
@@ -1808,13 +1911,18 @@ public class Project_Assignment2
 	
 	public static void main (String[] args)
     {
-		// Contains the number of threads to be generated.
-		int num_threads = 1;
+		/*
+		 * First, test the Segmented Memory model for the internal storage of the Vector object
+		 * and test the model when being accessed by multiple threads using different numbers of
+		 * operations.
+		 */
+		System.out.println("Segmented Memory Model - ");
+		System.out.println("# Operations:\tExecution time:");
 		
 		for(int i = 1; i <= max_threads; i++)
 		{
 			// Have the number of threads used for multithreading be initialized from 1 to 32.
-			num_threads = i;
+			int num_threads = i;
 			
 			// Create a new lock-free stack for each iteration.
 			vector = new Vector<Integer>(segmented_contiguous, capacity);
@@ -1865,10 +1973,11 @@ public class Project_Assignment2
 			// Add the execution time to the list of execution times.
 			execution_times.add(execution_time);
 						
-			// Print the number of threads used and the execution time during multithreading.
-			System.out.println("# Threads: " + i);
-			System.out.println("Execution time: " + execution_time + " seconds");
-			System.out.println("");
+			/*
+			 * Print the number of operations used and the execution time 
+			 * during multithreading.
+			 */
+			System.out.println(i + "\t\t" + execution_time + " sec");
 			
 			// Clear out all the threads' list of Nodes to use new Nodes for the next iteration.
 			for(int j = 0; j < i; j++)
@@ -1877,8 +1986,83 @@ public class Project_Assignment2
 			}
 		}
 		
-		// Contains the text file. Start printing the results into a text file.
-		PrintWriter writer = null;
+		/*
+		 * Switch the internal storage model for the Vector object to a Contiguous Memory Model
+		 * and test the model when being accessed by multiple threads using different numbers of
+		 * operations.
+		 */
+		segmented_contiguous = true;
+		
+		System.out.println("");
+		System.out.println("Contiguous Memory Model - ");
+		System.out.println("# Operations:\tExecution time:");
+		
+		for(int i = 1; i <= max_threads; i++)
+		{
+			// Have the number of threads used for multithreading be initialized from 1 to 32.
+			int num_threads = i;
+			
+			// Create a new lock-free stack for each iteration.
+			vector = new Vector<Integer>(segmented_contiguous, capacity);
+			
+			// Populate the lock-free stack with elements.
+			populate(population);
+			
+			// Add a new list of Nodes for the new thread and populate the threads with a list of Nodes.
+			threadNodes.add(new ArrayList<Node<Integer>>());
+			populateThreads(num_threads);
+			
+			// Contains the threads that will be used for multithreading.
+			Thread threads[] = new Thread[num_threads];
+			
+			// Record the start of the execution time prior to spawning the threads.
+			long start = System.nanoTime();
+			
+			// Spawn 'i' number of concurrent threads to access the Vector.
+			for(int j = 0; j < num_threads; j++)
+			{
+				threads[j] = new Thread(new VectorThread(j, max_operations));
+				threads[j].start();
+			}
+			
+			// Join the threads.
+			for(int j = 0; j < num_threads; j++)
+			{
+				try
+				{
+					threads[j].join();
+				}
+				
+				catch (Exception ex)
+				{
+					System.out.println("Failed to join thread.");
+				}
+			}
+			
+			// Record the end of the execution time after all threads are complete.
+			long end = System.nanoTime();
+			
+			// Record the total execution time.
+			long duration = end - start;
+			
+			// Convert the execution time to seconds.
+			float execution_time = (float) duration / 1000000000;
+			
+			// Add the execution time to the list of execution times.
+			execution_times.add(execution_time);
+						
+			/*
+			 * Print the number of operations used and the execution time 
+			 * during multithreading.
+			 */
+			System.out.println(i + "\t\t" + execution_time + " sec");
+			
+			// Clear out all the threads' list of Nodes to use new Nodes for the next iteration.
+			for(int j = 0; j < i; j++)
+			{
+				threadNodes.get(j).clear();
+			}
+		}
 	}
 		
 	// Function used to populate the concurrent stack by pushing 'x' number of elements.
@@ -1887,7 +2071,7 @@ public class Project_Assignment2
 		for(int i = 0; i < x; i++)
 		{
 			Node<Integer> new_Node = new Node<Integer>(i);
-			vector.WF_pushBack(new_Node);
+			vector.FAA_pushBack(new_Node);
 		}
 	}
 	

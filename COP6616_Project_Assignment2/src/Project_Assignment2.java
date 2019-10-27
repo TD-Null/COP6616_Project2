@@ -867,7 +867,7 @@ class Segmented<T>
 			
 			for(int i = 0; i < newCapacity; i++)
 			{
-				segments.get(0).set(0, vec.NotValue_Elem);
+				newArray.set(i, vec.NotValue_Elem);
 			}
 			
 			if(segments.compareAndSet(segIdx, null, newArray))
@@ -1790,13 +1790,13 @@ class VectorThread extends Thread
 public class Project_Assignment2 
 {
 	// Contains the maximum numbers of threads to use to test the wait-free vector.
-	public static int max_threads = 32;
+	public static int max_threads = 2;
 	
 	// Contains a list of Nodes pre-allocated for each thread using during multithreading when accessing the stack.
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 10000;
+	public static int max_operations = 3;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
 	public static int population = 500;
@@ -1809,9 +1809,6 @@ public class Project_Assignment2
 	
 	// Contains the Vector object to be accessed by multiple threads.
 	public static Vector<Integer> vector;
-		
-	// Contains the execution times from using threads 1 to 32 during multithreading.
-	public static ArrayList<Float> execution_times = new ArrayList<Float>();
 	
 	public static void main (String[] args)
     {
@@ -1873,9 +1870,6 @@ public class Project_Assignment2
 			
 			// Convert the execution time to seconds.
 			float execution_time = (float) duration / 1000000000;
-			
-			// Add the execution time to the list of execution times.
-			execution_times.add(execution_time);
 						
 			/*
 			 * Print the number of operations used and the execution time 
@@ -1951,9 +1945,6 @@ public class Project_Assignment2
 			
 			// Convert the execution time to seconds.
 			float execution_time = (float) duration / 1000000000;
-			
-			// Add the execution time to the list of execution times.
-			execution_times.add(execution_time);
 						
 			/*
 			 * Print the number of operations used and the execution time 

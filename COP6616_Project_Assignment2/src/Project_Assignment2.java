@@ -98,7 +98,7 @@ class PopDescr<T>
 				
 				if(!this.vec.segmented_contiguous)
 				{
-					SegSpot spot = this.vec.getSegSpot(this.pos);
+					SegSpot spot = this.vec.getSegSpot(this.pos - 1);
 					expected = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
 					
 					if(expected.equals(this.vec.NotValue_Elem))
@@ -134,7 +134,7 @@ class PopDescr<T>
 				
 				else
 				{
-					int spot = this.vec.getConSpot(this.pos);
+					int spot = this.vec.getConSpot(this.pos - 1);
 					expected = this.vec.conStorage.array.get(spot).getReference();
 					
 					if(expected.equals(this.vec.NotValue_Elem))
@@ -948,7 +948,7 @@ class Contiguous<T>
 		if(this.vec.conStorage.equals(this))
 		{
 			// If so, copy all elements from the old reference into the new array.
-			for(int i = this.capacity; i >= 0; i--)
+			for(int i = this.capacity - 1; i >= 0; i--)
 			{
 				vnew.copyValue(i);
 			}
@@ -967,6 +967,7 @@ class Contiguous<T>
 	 */
 	void copyValue(int pos)
 	{
+		//System.out.println(pos);
 		/*
 		 * Check first if the value of the element is NotCopied, signifying
 		 * that the position hasn't had the element copied over the position.
@@ -1006,7 +1007,7 @@ class Contiguous<T>
 		 * If a thread sees that the position of the array is NotCopied, then
 		 * copy the value from the old referenced Contiguous object.
 		 */
-		if(this.old.array.get(pos).equals(this.vec.NotCopied_Elem))
+		if(this.array.get(pos).equals(this.vec.NotCopied_Elem))
 		{
 			this.copyValue(pos);
 		}
@@ -1664,18 +1665,21 @@ class VectorThread extends Thread
 			// If the number is 1, use a tail operation.
 			if(random == 1)
 			{
+				//System.out.println("Thread " + threadIndex + " using TO");
 				tail_Operations();
 			}
 						
 			// If the number is 2, use a random access operation.
 			else if(random == 2)
 			{
+				//System.out.println("Thread " + threadIndex + " using RAO");
 				randomAccess_Operations();
 			}
 			
 			// If the number is 3, use a multi-position operation.
 			else if(random == 3)
 			{
+				//System.out.println("Thread " + threadIndex + " using MPO");
 				multiPosition_Operations();
 			}
 		}
@@ -1790,13 +1794,13 @@ class VectorThread extends Thread
 public class Project_Assignment2 
 {
 	// Contains the maximum numbers of threads to use to test the wait-free vector.
-	public static int max_threads = 2;
+	public static int max_threads = 5;
 	
 	// Contains a list of Nodes pre-allocated for each thread using during multithreading when accessing the stack.
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 3;
+	public static int max_operations = 5;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
 	public static int population = 500;

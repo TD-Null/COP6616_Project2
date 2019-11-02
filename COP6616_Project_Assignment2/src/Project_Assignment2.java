@@ -411,40 +411,52 @@ class ShiftDescr<T>
 }
 
 /*
- * 
+ * Descriptor Object that contains a type of Descriptor Object used 
+ * by the Vector class, including: 1) Pop Descriptor, 2) Pop-sub Descriptor, 
+ * 3) Push Descriptor, and 4) Shift Descriptor. The type of Descriptor Object 
+ * used will depend on which Constructor is used during the initialization of
+ * the Descriptor Object. This class contains a complete() function to complete
+ * the operation of the initialized Descriptor Object and a getValue() function
+ * to get the Node value currently contained within the Descriptor.
  */
 class Descriptor<T>
 {
+	// Fields containing the Descriptor type and different Descriptor Objects.
 	Descr type;
 	PopDescr<T> pop;
 	PopSubDescr<T> popSub;
 	PushDescr<T> push;
 	ShiftDescr<T> shift;
 	
+	// Constructor for a Pop Descriptor.
 	Descriptor(Vector<T> vec, int pos)
 	{
 		type = Descr.POP;
 		pop = new PopDescr<T>(vec, pos);
 	}
 	
+	// Constructor for a Pop-sub Descriptor.
 	Descriptor(PopDescr<T> parent, Node<T> value)
 	{
 		type = Descr.POPSUB;
 		popSub = new PopSubDescr<T>(parent, value);
 	}
 	
+	// Constructor for a PopSub Descriptor.
 	Descriptor(Vector<T> vec, int pos, Node<T> value)
 	{
 		type = Descr.PUSH;
 		push = new PushDescr<T>(vec, value, pos);
 	}
 	
+	// Constructor for a Shift Descriptor.
 	Descriptor(ShiftOp<T> op, ShiftDescr<T> prev, Node<T> value, int pos)
 	{
 		type = Descr.SHIFT;
 		shift = new ShiftDescr<T>(op, prev, value, pos);
 	}
 	
+	// Function that completes the Descriptor Object's operation.
 	boolean complete()
 	{
 		if(type == Descr.POP)
@@ -470,6 +482,7 @@ class Descriptor<T>
 		return false;
 	}
 	
+	// Function that gets the Node value contained within the Descriptor Object.
 	@SuppressWarnings("unchecked")
 	Node<T> getValue()
 	{
@@ -1173,11 +1186,13 @@ class Vector<T>
 		return conStorage.capacity;
 	}
 	
+	// Gets the position of an element within a Segmented Element Model.
 	SegSpot getSegSpot(int pos)
 	{
 		return segStorage.getSpot(pos);
 	}
 	
+	// Gets the position of an element within a Contiguous Element Model.
 	int getConSpot(int pos)
 	{
 		return conStorage.getSpot(pos);
@@ -1717,7 +1732,7 @@ class Vector<T>
  * random access operations, and multi-position operations at
  * random.
  */
-class VectorThread extends Thread
+class VectorThread<T> extends Thread
 {
 	/*
 	 * Contains an index value to identify each thread. 
@@ -1731,12 +1746,47 @@ class VectorThread extends Thread
 	
 	// Counter used to access the thread's list of Nodes.
 	int counter = 0;
+	
+	/*
+	 * Contains the ratios for tail operations, random access operations, 
+	 * and multi-position operations during multithreading.
+	 */
+	double TO_Ratio;
+	double RA_Ratio;
+	double MP_Ratio;
+	
+	/*
+	 * Counter used for each type of operation to follow the ratios
+	 * of operations given to the current thread.
+	 */
+	int TO_Cntr = 0;
+	int RA_Cntr = 0;
+	int MP_Cntr = 0;
+	
+	/*
+	 * Counters for each specific operation. Each specific operation's
+	 * ratio is 0.5 out of its operation type's ratio. 
+	 * 
+	 * For example, if the TO_Ratio is equal to 0.5 and the total number 
+	 * of operations is equal to 10000, then the number of push operations 
+	 * and pop operations used 2500, as the number of tail operation to be
+	 * used is 5000.
+	 */
+	int push_Cntr = 0;
+	int pop_Cntr = 0;
+	int at_Cntr = 0;
+	int cw_Cntr = 0;
+	int insert_Cntr = 0;
+	int erase_Cntr = 0;
 
 	// In the constructor, initialize the thread ID and the number of operations.
-	public VectorThread(int threadIndex, int num_operations)
+	public VectorThread(int threadIndex, int num_operations, double TO_Ratio, double RA_Ratio, double MP_Ratio)
 	{
 		this.threadIndex = threadIndex;
 		this.num_operations = num_operations;
+		this.TO_Ratio = TO_Ratio;
+		this.RA_Ratio = RA_Ratio;
+		this.MP_Ratio = MP_Ratio;
 	}
 	
 	@Override
@@ -1751,25 +1801,103 @@ class VectorThread extends Thread
 			// Get a number of either 1 to 3 from the random number generator.
 			random = (int) (Math.random() * 3) + 1;
 			
-			// If the number is 1, use a tail operation.
+			/*
+			 * If the number is 1, use a tail operation if the number of tail operations
+			 * used is below or equal to its ratio of the total number of operations. If
+			 * not, then use either a random access operation or multi-position operation
+			 * according to their counters and ratios.
+			 */
 			if(random == 1)
 			{
-				//System.out.println("Thread " + threadIndex + " using TO");
-				tail_Operations();
+				if(TO_Cntr <= (num_operations * TO_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using TO");
+					tail_Operations();
+					
+					TO_Cntr++;
+				}
+				
+				else if(RA_Cntr <= (num_operations * RA_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using RAO");
+					randomAccess_Operations();
+					
+					RA_Cntr++;
+				}
+				
+				else if(MP_Cntr <= (num_operations * MP_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using MPO");
+					multiPosition_Operations();
+					
+					MP_Cntr++;
+				}
 			}
 						
-			// If the number is 2, use a random access operation.
+			/*
+			 * If the number is 2, use a random access operation if the number of random 
+			 * access operations used is below or equal to its ratio of the total number 
+			 * of operations. If not, then use either a tail operation or multi-position 
+			 * operation according to their counters and ratios.
+			 */
 			else if(random == 2)
 			{
-				//System.out.println("Thread " + threadIndex + " using RAO");
-				randomAccess_Operations();
+				if(RA_Cntr <= (num_operations * RA_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using RAO");
+					randomAccess_Operations();
+					
+					RA_Cntr++;
+				}
+				
+				else if(TO_Cntr <= (num_operations * TO_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using TO");
+					tail_Operations();
+					
+					TO_Cntr++;
+				}
+				
+				else if(MP_Cntr <= (num_operations * MP_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using MPO");
+					multiPosition_Operations();
+					
+					MP_Cntr++;
+				}
 			}
 			
-			// If the number is 3, use a multi-position operation.
+			/*
+			 * If the number is 3, use a multi-position operation if the number of multi- 
+			 * position operations used is below or equal to its ratio of the total number 
+			 * of operations. If not, then use either a tail operation or random access 
+			 * operation according to their counters and ratios.
+			 */
 			else if(random == 3)
 			{
-				//System.out.println("Thread " + threadIndex + " using MPO");
-				multiPosition_Operations();
+				if(MP_Cntr <= (num_operations * MP_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using MPO");
+					multiPosition_Operations();
+					
+					MP_Cntr++;
+				}
+				
+				else if(TO_Cntr <= (num_operations * TO_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using TO");
+					tail_Operations();
+					
+					TO_Cntr++;
+				}
+				
+				else if(RA_Cntr <= (num_operations * RA_Ratio))
+				{
+					//System.out.println("Thread " + threadIndex + " using RAO");
+					randomAccess_Operations();
+					
+					RA_Cntr++;
+				}
 			}
 		}
 	}
@@ -1783,24 +1911,57 @@ class VectorThread extends Thread
 		// Get a number of either 0 or 1 from the random number generator.
 		int random = rand.nextInt(2);
 					
-		// If the number is 0, use a wait-free pop back operation on the vector.
+		/*
+		 * If the number is 0, use a wait-free pop back operation on the vector if
+		 * the number of pop back operations is less than or equal to its ratio. If
+		 * not, then use a push back operation.
+		 */
 		if(random == 0)
 		{
-			// Pop the Node element at the tail of the vector.
-			Project_Assignment2.vector.WF_popBack();
+			if(pop_Cntr <= (num_operations * TO_Ratio * 0.5))
+			{
+				// Pop the Node element at the tail of the vector.
+				Project_Assignment2.vector.WF_popBack();
+				pop_Cntr++;
+			}
+			
+			else
+			{
+				// Push a Node element from the thread's list of Nodes onto the tail of the vector.
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				Project_Assignment2.vector.WF_pushBack(n);
+				counter++;
+				push_Cntr++;
+			}
 		}
 					
-		// If the number is 1, use a wait-free push back operation on the vector.
+		/*
+		 * If the number is 1, use a wait-free push back operation on the vector if
+		 * the number of push back operations is less than or equal to its ratio. If
+		 * not, then use a pop back operation.
+		 */
 		else if(random == 1)
 		{
-			// Push a Node element from the thread's list of Nodes onto the tail of the vector.
-			Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-			Project_Assignment2.vector.WF_pushBack(n);
-			counter++;
+			if(push_Cntr <= (num_operations * TO_Ratio * 0.5))
+			{
+				// Push a Node element from the thread's list of Nodes onto the tail of the vector.
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				Project_Assignment2.vector.WF_pushBack(n);
+				counter++;
+				push_Cntr++;
+			}
+			
+			else
+			{
+				// Pop the Node element at the tail of the vector.
+				Project_Assignment2.vector.WF_popBack();
+				pop_Cntr++;
+			}
 		}
 	}
 	
 	// Use either an at() or conditional write operation on the vector. 
+	@SuppressWarnings("unchecked")
 	private void randomAccess_Operations()
 	{
 		// Random number generator.
@@ -1812,38 +1973,112 @@ class VectorThread extends Thread
 		// Get a random position from the vector based on size.
 		int random_pos = (int) (Math.random() * Project_Assignment2.vector.getCapacity()) + 1;
 		
-		// If the number is 0, use a at() operation on the vector.
+		/*
+		 * If the number is 0, use a at() operation on the vector if the number
+		 * of at() operations is less than or equal to its ratio. If not, then
+		 * use a conditional write operation.
+		 */
 		if(random == 0)
 		{
-			// Get the element of the vector at the given position.
-			Project_Assignment2.vector.at(random_pos);
-		}
-					
-		// If the number is 1, use a conditional write operation on the vector.
-		else if(random == 1)
-		{
-			/*
-			 * Write a Node element at the given position of the vector using 
-			 * a conditional write with a Node from thread's list of Nodes.
-			 */
-			Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-			
-			Object old_Elem;
-			
-			if(!Project_Assignment2.segmented_contiguous)
+			if(at_Cntr <= (num_operations * RA_Ratio * 0.5))
 			{
-				SegSpot spot = Project_Assignment2.vector.getSegSpot(random_pos);
-				old_Elem = Project_Assignment2.vector.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				// Get the element of the vector at the given position.
+				Project_Assignment2.vector.at(random_pos);
+				
+				at_Cntr++;
 			}
 			
 			else
 			{
-				int spot = Project_Assignment2.vector.getConSpot(random_pos);
-				old_Elem = Project_Assignment2.vector.conStorage.array.get(spot).getReference();
+				/*
+				 * Write a Node element at the given position of the vector using 
+				 * a conditional write with a Node from thread's list of Nodes.
+				 */
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				
+				Object old_Elem;
+				
+				if(!Project_Assignment2.segmented_contiguous)
+				{
+					SegSpot spot = Project_Assignment2.vector.getSegSpot(random_pos);
+					old_Elem = Project_Assignment2.vector.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					
+					if(old_Elem instanceof Descriptor)
+					{
+						old_Elem = ((Descriptor<T>) old_Elem).getValue();
+					}
+				}
+				
+				else
+				{
+					int spot = Project_Assignment2.vector.getConSpot(random_pos);
+					old_Elem = Project_Assignment2.vector.conStorage.array.get(spot).getReference();
+					
+					if(old_Elem instanceof Descriptor)
+					{
+						old_Elem = ((Descriptor<T>) old_Elem).getValue();
+					}
+				}
+				
+				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n);
+				counter++;
+				
+				cw_Cntr++;
+			}
+		}
+					
+		/*
+		 * If the number is 1, use a conditional write operation on the vector if the number
+		 * of conditional write operations is less than or equal to its ratio. If not, then
+		 * use a at() operation.
+		 */
+		else if(random == 1)
+		{
+			if(cw_Cntr <= (num_operations * RA_Ratio * 0.5))
+			{
+				/*
+				 * Write a Node element at the given position of the vector using 
+				 * a conditional write with a Node from thread's list of Nodes.
+				 */
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				
+				Object old_Elem;
+				
+				if(!Project_Assignment2.segmented_contiguous)
+				{
+					SegSpot spot = Project_Assignment2.vector.getSegSpot(random_pos);
+					old_Elem = Project_Assignment2.vector.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					
+					if(old_Elem instanceof Descriptor)
+					{
+						old_Elem = ((Descriptor<T>) old_Elem).getValue();
+					}
+				}
+				
+				else
+				{
+					int spot = Project_Assignment2.vector.getConSpot(random_pos);
+					old_Elem = Project_Assignment2.vector.conStorage.array.get(spot).getReference();
+					
+					if(old_Elem instanceof Descriptor)
+					{
+						old_Elem = ((Descriptor<T>) old_Elem).getValue();
+					}
+				}
+				
+				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n);
+				counter++;
+				
+				cw_Cntr++;
 			}
 			
-			Project_Assignment2.vector.cwrite(random_pos, old_Elem, n);
-			counter++;
+			else
+			{
+				// Get the element of the vector at the given position.
+				Project_Assignment2.vector.at(random_pos);
+				
+				at_Cntr++;
+			}
 		}
 	}
 	
@@ -1859,23 +2094,62 @@ class VectorThread extends Thread
 		// Get a random position from the vector based on size.
 		int random_pos = (int) (Math.random() * Project_Assignment2.vector.size.get()) + 1;
 					
-		// If the number is 0, use a insertAt() operation on the vector.
+		/*
+		 * If the number is 0, use an insertAt() operation on the vector if the
+		 * number of insertAt() operations is less than or equal to its ratio.
+		 * If not, then use an eraseAt() operation.
+		 */
 		if(random == 0)
 		{
-			/*
-			 * Insert a Node element into the vector at the given position
-			 * using a Node from thread's list of Nodes.
-			 */
-			Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-			Project_Assignment2.vector.insertAt(random_pos, n);
-			counter++;
+			if(insert_Cntr <= (num_operations * MP_Ratio * 0.5))
+			{
+				/*
+				 * Insert a Node element into the vector at the given position
+				 * using a Node from thread's list of Nodes.
+				 */
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				Project_Assignment2.vector.insertAt(random_pos, n);
+				counter++;
+				
+				insert_Cntr++;
+			}
+			
+			else
+			{
+				// Erase the Node element in the vector at the given position.
+				Project_Assignment2.vector.eraseAt(random_pos);
+				
+				erase_Cntr++;
+			}
 		}
 					
-		// If the number is 1, use a eraseAt() pop back operation on the vector.
+		/*
+		 * If the number is 1, use an eraseAt() operation on the vector if the
+		 * number of eraseAt() operations is less than or equal to its ratio.
+		 * If not, then use an insertAt() operation.
+		 */
 		else if(random == 1)
 		{
-			// Erase the Node element in the vector at the given position.
-			Project_Assignment2.vector.eraseAt(random_pos);
+			if(erase_Cntr <= (num_operations * MP_Ratio * 0.5))
+			{
+				// Erase the Node element in the vector at the given position.
+				Project_Assignment2.vector.eraseAt(random_pos);
+				
+				erase_Cntr++;
+			}
+			
+			else
+			{
+				/*
+				 * Insert a Node element into the vector at the given position
+				 * using a Node from thread's list of Nodes.
+				 */
+				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
+				Project_Assignment2.vector.insertAt(random_pos, n);
+				counter++;
+				
+				insert_Cntr++;
+			}
 		}
 	}
 }
@@ -1883,16 +2157,21 @@ class VectorThread extends Thread
 public class Project_Assignment2 
 {
 	// Contains the maximum numbers of threads to use to test the wait-free vector.
-	public static int max_threads = 5;
+	public static int max_threads = 32;
 	
 	// Contains a list of Nodes pre-allocated for each thread using during multithreading when accessing the stack.
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 5;
+	public static int max_operations = 1250;
+	
+	// Contains the ratios for tail operations, random access operations, and multi-position operations during multithreading.
+	public static double TO_Ratio = 0.5;
+	public static double RA_Ratio = 0.5;
+	public static double MP_Ratio = 0;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
-	public static int population = 500;
+	public static int population = 100;
 	
 	// Contains a boolean value to signify either using segmented or contiguous memory in the Vector object.
 	public static boolean segmented_contiguous = false;
@@ -1903,7 +2182,7 @@ public class Project_Assignment2
 	// Contains the Vector object to be accessed by multiple threads.
 	public static Vector<Integer> vector;
 	
-	public static void main (String[] args)
+	public static <T> void main (String[] args)
     {
 		/*
 		 * First, test the Segmented Memory model for the internal storage of the Vector object
@@ -1937,7 +2216,7 @@ public class Project_Assignment2
 			// Spawn 'i' number of concurrent threads to access the Vector.
 			for(int j = 0; j < num_threads; j++)
 			{
-				threads[j] = new Thread(new VectorThread(j, max_operations));
+				threads[j] = new Thread(new VectorThread<T>(j, max_operations, TO_Ratio, RA_Ratio, MP_Ratio));
 				threads[j].start();
 			}
 			
@@ -2012,7 +2291,7 @@ public class Project_Assignment2
 			// Spawn 'i' number of concurrent threads to access the Vector.
 			for(int j = 0; j < num_threads; j++)
 			{
-				threads[j] = new Thread(new VectorThread(j, max_operations));
+				threads[j] = new Thread(new VectorThread<T>(j, max_operations, TO_Ratio, RA_Ratio, MP_Ratio));
 				threads[j].start();
 			}
 			

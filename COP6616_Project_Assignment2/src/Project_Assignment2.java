@@ -410,6 +410,176 @@ class ShiftDescr<T>
 	}
 }
 
+/*
+ * 
+ */
+class Descriptor<T>
+{
+	Descr type;
+	PopDescr<T> pop;
+	PopSubDescr<T> popSub;
+	PushDescr<T> push;
+	ShiftDescr<T> shift;
+	
+	Descriptor(Vector<T> vec, int pos)
+	{
+		type = Descr.POP;
+		pop = new PopDescr<T>(vec, pos);
+	}
+	
+	Descriptor(PopDescr<T> parent, Node<T> value)
+	{
+		type = Descr.POPSUB;
+		popSub = new PopSubDescr<T>(parent, value);
+	}
+	
+	Descriptor(Vector<T> vec, int pos, Node<T> value)
+	{
+		type = Descr.PUSH;
+		push = new PushDescr<T>(vec, value, pos);
+	}
+	
+	Descriptor(ShiftOp<T> op, ShiftDescr<T> prev, Node<T> value, int pos)
+	{
+		type = Descr.SHIFT;
+		shift = new ShiftDescr<T>(op, prev, value, pos);
+	}
+	
+	boolean complete()
+	{
+		if(type == Descr.POP)
+		{
+			return pop.complete();
+		}
+		
+		else if(type == Descr.POPSUB)
+		{
+			return popSub.complete();
+		}
+		
+		else if(type == Descr.PUSH)
+		{
+			return push.complete();
+		}
+		
+		else if(type == Descr.SHIFT)
+		{
+			return shift.complete();
+		}
+		
+		return false;
+	}
+	
+	@SuppressWarnings("unchecked")
+	Node<T> getValue()
+	{
+		if(type == Descr.POP)
+		{
+			return ((PopSubDescr<T>) pop.child.get()).value;
+		}
+		
+		else if(type == Descr.POPSUB)
+		{
+			return popSub.value;
+		}
+		
+		else if(type == Descr.PUSH)
+		{
+			return push.value;
+		}
+		
+		else if(type == Descr.SHIFT)
+		{
+			return shift.value;
+		}
+		
+		return null;
+	}
+}
+
+class WFPopOp<T>
+{
+	Vector<T> vec;
+	
+	WFPopOp(Vector<T> vec)
+	{
+		this.vec = vec;
+	}
+	
+	Return_Elem<T> complete()
+	{
+		return new Return_Elem<T>(false, null);
+	}
+}
+
+class WFPushOp<T>
+{
+	Vector<T> vec;
+	Node<T> value;
+	
+	WFPushOp(Vector<T> vec, Node<T> value)
+	{
+		this.vec = vec;
+		this.value = value;
+	}
+	
+	int complete()
+	{
+		int pos = this.vec.size.get();
+		
+		return pos;
+	}
+}
+
+class CASPopOp<T>
+{
+	Vector<T> vec;
+	
+	CASPopOp(Vector<T> vec)
+	{
+		this.vec = vec;
+	}
+}
+
+class CASPushOp<T>
+{
+	Vector<T> vec;
+	Node<T> value;
+	
+	CASPushOp(Vector<T> vec, Node<T> value)
+	{
+		this.vec = vec;
+		this.value = value;
+	}
+}
+
+class WriteOp<T>
+{
+	Vector<T> vec;
+	int pos;
+	Node<T> old_Elem;
+	Node<T> new_Elem;
+	AtomicReference<WriteHelper<T>> child = new AtomicReference<WriteHelper<T>>();
+	
+	WriteOp(Vector<T> vec, int pos, Node<T> old_Elem, Node<T> new_Elem)
+	{
+		this.vec= vec;
+		this.pos = pos;
+		this.old_Elem = old_Elem;
+		this.new_Elem = new_Elem;
+	}
+}
+
+class WriteHelper<T>
+{
+	WriteOp<T> parent;
+	
+	WriteHelper(WriteOp<T> parent)
+	{
+		this.parent = parent;
+	}
+}
+
 class ShiftOp<T>
 {
 	Vector<T> vec;
@@ -676,91 +846,10 @@ class ShiftOp<T>
 	}
 }
 
-/*
- * 
- */
-class Descriptor<T>
+
+class AnnouncementTable
 {
-	Descr type;
-	PopDescr<T> pop;
-	PopSubDescr<T> popSub;
-	PushDescr<T> push;
-	ShiftDescr<T> shift;
 	
-	Descriptor(Vector<T> vec, int pos)
-	{
-		type = Descr.POP;
-		pop = new PopDescr<T>(vec, pos);
-	}
-	
-	Descriptor(PopDescr<T> parent, Node<T> value)
-	{
-		type = Descr.POPSUB;
-		popSub = new PopSubDescr<T>(parent, value);
-	}
-	
-	Descriptor(Vector<T> vec, int pos, Node<T> value)
-	{
-		type = Descr.PUSH;
-		push = new PushDescr<T>(vec, value, pos);
-	}
-	
-	Descriptor(ShiftOp<T> op, ShiftDescr<T> prev, Node<T> value, int pos)
-	{
-		type = Descr.SHIFT;
-		shift = new ShiftDescr<T>(op, prev, value, pos);
-	}
-	
-	boolean complete()
-	{
-		if(type == Descr.POP)
-		{
-			return pop.complete();
-		}
-		
-		else if(type == Descr.POPSUB)
-		{
-			return popSub.complete();
-		}
-		
-		else if(type == Descr.PUSH)
-		{
-			return push.complete();
-		}
-		
-		else if(type == Descr.SHIFT)
-		{
-			return shift.complete();
-		}
-		
-		return false;
-	}
-	
-	@SuppressWarnings("unchecked")
-	Node<T> getValue()
-	{
-		if(type == Descr.POP)
-		{
-			return ((PopSubDescr<T>) pop.child.get()).value;
-		}
-		
-		else if(type == Descr.POPSUB)
-		{
-			return popSub.value;
-		}
-		
-		else if(type == Descr.PUSH)
-		{
-			return push.value;
-		}
-		
-		else if(type == Descr.SHIFT)
-		{
-			return shift.value;
-		}
-		
-		return null;
-	}
 }
 
 /*

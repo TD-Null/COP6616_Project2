@@ -101,7 +101,7 @@ class PopDescr<T>
 				if(!this.vec.segmented_contiguous)
 				{
 					SegSpot spot = this.vec.getSegSpot(this.pos - 1);
-					expected = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 					
 					if(expected.equals(this.vec.NotValue_Elem))
 					{
@@ -117,18 +117,18 @@ class PopDescr<T>
 					{
 						PopSubDescr<T> psh = new PopSubDescr<T>(this, expected);
 						
-						if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, psh))
+						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, psh))
 						{
 							this.child.compareAndSet(null, psh);
 							
 							if(this.child.get().equals(psh))
 							{
-								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, psh, this.vec.NotValue_Elem);
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, psh, this.vec.NotValue_Elem);
 							}
 							
 							else
 							{
-								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, expected);
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, expected);
 							}
 						}
 					}
@@ -137,7 +137,7 @@ class PopDescr<T>
 				else
 				{
 					int spot = this.vec.getConSpot(this.pos - 1);
-					expected = this.vec.conStorage.array.get(spot).getReference();
+					expected = this.vec.conStorage.get().array.get(spot).getReference();
 					
 					if(expected.equals(this.vec.NotValue_Elem))
 					{
@@ -153,18 +153,18 @@ class PopDescr<T>
 					{
 						PopSubDescr<T> psh = new PopSubDescr<T>(this, expected);
 						
-						if(this.vec.conStorage.array.get(spot).compareAndSet(expected, psh, false, false))
+						if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, psh, false, false))
 						{
 							this.child.compareAndSet(null, psh);
 							
 							if(this.child.get().equals(psh))
 							{
-								this.vec.conStorage.array.get(spot).compareAndSet(psh, this.vec.NotValue_Elem, false, false);
+								this.vec.conStorage.get().array.get(spot).compareAndSet(psh, this.vec.NotValue_Elem, false, false);
 							}
 							
 							else
 							{
-								this.vec.conStorage.array.get(spot).compareAndSet(this, expected, false, false);
+								this.vec.conStorage.get().array.get(spot).compareAndSet(this, expected, false, false);
 							}
 						}
 					}
@@ -175,13 +175,13 @@ class PopDescr<T>
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(this.pos);
-			this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.vec.NotValue_Elem);
+			this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.vec.NotValue_Elem);
 		}
 		
 		else
 		{
 			int spot = this.vec.getConSpot(this.pos);
-			this.vec.conStorage.array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
+			this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
 		}
 		
 		return (!this.child.get().equals(State.FAILED));
@@ -208,12 +208,12 @@ class PopSubDescr<T>
 			
 			if(this.parent.child.get().equals(this))
 			{
-				this.parent.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.vec.NotValue_Elem);
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.vec.NotValue_Elem);
 			}
 			
 			else
 			{
-				this.parent.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
 			}
 		}
 		
@@ -223,12 +223,12 @@ class PopSubDescr<T>
 			
 			if(this.parent.child.get().equals(this))
 			{
-				this.parent.vec.conStorage.array.get(spot).compareAndSet(this, this.parent.vec.NotValue_Elem, false, false);
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.parent.vec.NotValue_Elem, false, false);
 			}
 			
 			else
 			{
-				this.parent.vec.conStorage.array.get(spot).compareAndSet(this, this.value, false, false);
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
 			}
 		}
 		
@@ -259,9 +259,9 @@ class PushDescr<T>
 		
 		if(!this.vec.segmented_contiguous)
 		{
-			SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-			SegSpot spot2 = this.vec.segStorage.getSpot(this.pos - 1);
-			current = this.vec.segStorage.segments.get(spot2.segIdx).get(spot2.itemIdx);
+			SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
+			SegSpot spot2 = this.vec.segStorage.get().getSpot(this.pos - 1);
+			current = this.vec.segStorage.get().segments.get(spot2.segIdx).get(spot2.itemIdx);
 			
 			while(!(this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
 			{
@@ -271,7 +271,7 @@ class PushDescr<T>
 				}
 				
 				((Descriptor<T>) current).complete();
-				current = this.vec.segStorage.segments.get(spot2.segIdx).get(spot2.itemIdx);
+				current = this.vec.segStorage.get().segments.get(spot2.segIdx).get(spot2.itemIdx);
 			}
 			
 			if(this.state.get().equals(State.UNDECIDED))
@@ -289,20 +289,20 @@ class PushDescr<T>
 			
 			if(this.state.get().equals(State.PASSED))
 			{
-				this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
+				this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
 			}
 			
 			else
 			{
-				this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.vec.NotValue_Elem);
+				this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.vec.NotValue_Elem);
 			}
 		}
 		
 		else
 		{
-			int spot = this.vec.conStorage.getSpot(this.pos);
-			int spot2 = this.vec.conStorage.getSpot(this.pos - 1);
-			current = this.vec.conStorage.array.get(spot2).getReference();
+			int spot = this.vec.conStorage.get().getSpot(this.pos);
+			int spot2 = this.vec.conStorage.get().getSpot(this.pos - 1);
+			current = this.vec.conStorage.get().array.get(spot2).getReference();
 			
 			while(!(this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
 			{
@@ -312,7 +312,7 @@ class PushDescr<T>
 				}
 				
 				((Descriptor<T>) current).complete();
-				current = this.vec.conStorage.array.get(spot2).getReference();
+				current = this.vec.conStorage.get().array.get(spot2).getReference();
 			}
 			
 			if(this.state.get().equals(State.UNDECIDED))
@@ -330,12 +330,12 @@ class PushDescr<T>
 			
 			if(this.state.get().equals(State.PASSED))
 			{
-				current = this.vec.conStorage.array.get(spot).compareAndSet(this, this.value, false, false);
+				current = this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
 			}
 			
 			else
 			{
-				current = this.vec.conStorage.array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
+				current = this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
 			}
 		}
 		
@@ -383,12 +383,12 @@ class ShiftDescr<T>
 			if(isAssoc)
 			{
 				this.op.complete();
-				this.op.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.op.valueGetter(this));
+				this.op.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.op.valueGetter(this));
 			}
 			
 			else
 			{
-				this.op.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
+				this.op.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
 			}
 		}
 		
@@ -399,12 +399,12 @@ class ShiftDescr<T>
 			if(isAssoc)
 			{
 				this.op.complete();
-				this.op.vec.conStorage.array.get(spot).compareAndSet(this, this.op.valueGetter(this), false, false);
+				this.op.vec.conStorage.get().array.get(spot).compareAndSet(this, this.op.valueGetter(this), false, false);
 			}
 			
 			else
 			{
-				this.op.vec.conStorage.array.get(spot).compareAndSet(this, this.value, false, false);
+				this.op.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
 			}
 		}
 		
@@ -552,13 +552,13 @@ class WFPopOp<T>
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(pos);
-			Object expected = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
 			if(expected.equals(this.vec.NotValue_Elem))
 			{
 				Descriptor<T> ph = new Descriptor<T>(this.vec, pos);
 				
-				if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
+				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
 				{
 					boolean res = ph.complete();
 					
@@ -585,13 +585,13 @@ class WFPopOp<T>
 		else
 		{
 			int spot = this.vec.getConSpot(pos);
-			Object expected = this.vec.conStorage.array.get(spot);
+			Object expected = this.vec.conStorage.get().array.get(spot);
 			
 			if(expected.equals(this.vec.NotValue_Elem))
 			{
 				Descriptor<T> ph = new Descriptor<T>(this.vec, pos);
 				
-				if(this.vec.conStorage.array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
+				if(this.vec.conStorage.get().array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
 				{
 					boolean res = ph.complete();
 					
@@ -638,13 +638,13 @@ class WFPushOp<T>
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(pos);
-			Object expected = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
 			if(expected.equals(this.vec.NotValue_Elem))
 			{
 				if(pos == 0)
 				{
-					if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
 					{
 						this.vec.size.getAndIncrement();
 						return 0;
@@ -659,7 +659,7 @@ class WFPushOp<T>
 			
 				Descriptor<T> ph = new Descriptor<T>(this.vec, pos, value);
 				
-				if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
+				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
 				{
 					boolean res = ph.push.complete();
 					
@@ -690,13 +690,13 @@ class WFPushOp<T>
 		else
 		{
 			int spot = this.vec.getConSpot(pos);
-			Object expected = this.vec.conStorage.array.get(spot);
+			Object expected = this.vec.conStorage.get().array.get(spot);
 			
 			if(expected.equals(this.vec.NotValue_Elem))
 			{
 				if(pos == 0)
 				{
-					if(this.vec.conStorage.array.get(spot).compareAndSet(expected, value, false, false))
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
 					{
 						this.vec.size.getAndIncrement();
 						return 0;
@@ -711,7 +711,7 @@ class WFPushOp<T>
 			
 				Descriptor<T> ph = new Descriptor<T>(this.vec, pos, value);
 				
-				if(this.vec.conStorage.array.get(spot).compareAndSet(expected, ph, false, false))
+				if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
 				{
 					boolean res = ph.push.complete();
 					
@@ -766,9 +766,9 @@ class CASPopOp<T>
 			if(!this.vec.segmented_contiguous)
 			{
 				SegSpot spot = this.vec.getSegSpot(pos);
-				Object cur = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
-				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
+				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
 				{
 					this.vec.size.getAndDecrement();
 					Object value = cur;
@@ -779,9 +779,9 @@ class CASPopOp<T>
 			else
 			{
 				int spot = this.vec.getConSpot(pos);
-				Object cur = this.vec.conStorage.array.get(spot);
+				Object cur = this.vec.conStorage.get().array.get(spot);
 				
-				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
+				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
 				{
 					this.vec.size.getAndDecrement();
 					Object value = cur;
@@ -812,9 +812,9 @@ class CASPushOp<T>
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(pos);
-			Object cur = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+			Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
-			if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
+			if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
 			{
 				this.vec.size.getAndIncrement();
 				return pos;
@@ -824,9 +824,9 @@ class CASPushOp<T>
 		else
 		{
 			int spot = this.vec.getConSpot(pos);
-			Object cur = this.vec.conStorage.array.get(spot);
+			Object cur = this.vec.conStorage.get().array.get(spot);
 			
-			if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.array.get(spot).compareAndSet(cur, value, false, false))
+			if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
 			{
 				this.vec.size.getAndIncrement();
 				return pos;
@@ -860,7 +860,7 @@ class WriteOp<T>
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(this.pos);
-			Object value = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+			Object value = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
 			if(value instanceof Descriptor)
 			{
@@ -871,7 +871,7 @@ class WriteOp<T>
 			{
 				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
 				
-				if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, write))
+				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, write))
 				{
 					this.child.compareAndSet(null, write);
 					
@@ -881,12 +881,12 @@ class WriteOp<T>
 						
 						if(currentValue.equals(old_Elem))
 						{
-							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
+							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
 						}
 						
 						else
 						{
-							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
+							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
 						}
 					}
 				}
@@ -896,7 +896,7 @@ class WriteOp<T>
 		else
 		{
 			int spot = this.vec.getConSpot(this.pos);
-			Object value = this.vec.conStorage.array.get(spot).getReference();
+			Object value = this.vec.conStorage.get().array.get(spot).getReference();
 			
 			if(value instanceof Descriptor)
 			{
@@ -907,7 +907,7 @@ class WriteOp<T>
 			{
 				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
 				
-				if(this.vec.conStorage.array.get(spot).compareAndSet(value, write, false, false))
+				if(this.vec.conStorage.get().array.get(spot).compareAndSet(value, write, false, false))
 				{
 					this.child.compareAndSet(null, write);
 					
@@ -917,12 +917,12 @@ class WriteOp<T>
 						
 						if(currentValue.equals(old_Elem))
 						{
-							this.vec.conStorage.array.get(spot).compareAndSet(write, new_Elem, false, false);
+							this.vec.conStorage.get().array.get(spot).compareAndSet(write, new_Elem, false, false);
 						}
 						
 						else
 						{
-							this.vec.conStorage.array.get(spot).compareAndSet(write, currentValue, false, false);
+							this.vec.conStorage.get().array.get(spot).compareAndSet(write, currentValue, false, false);
 						}
 					}
 				}
@@ -952,12 +952,12 @@ class WriteHelper<T>
 			
 			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
 			{
-				this.parent.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.new_Elem);
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.new_Elem);
 			}
 			
 			else
 			{
-				this.parent.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
 			}
 		}
 		
@@ -967,12 +967,12 @@ class WriteHelper<T>
 			
 			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
 			{
-				this.parent.vec.conStorage.array.get(spot).compareAndSet(this, this.parent.new_Elem, false, false);
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.parent.new_Elem, false, false);
 			}
 			
 			else
 			{
-				this.parent.vec.conStorage.array.get(spot).compareAndSet(this, this.value, false, false);
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
 			}
 		}
 		
@@ -1036,8 +1036,8 @@ class ShiftOp<T>
 			
 			if(!this.vec.segmented_contiguous)
 			{
-				SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-				cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
+				cvalue = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
 				if(cvalue instanceof Descriptor)
 				{
@@ -1053,13 +1053,13 @@ class ShiftOp<T>
 				{
 					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
 					
-					if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 					{
 						this.next.compareAndSet(null, sh);
 						
 						if(!(sh.equals(this.next.get())))
 						{
-							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
 						}
 					}
 				}
@@ -1067,8 +1067,8 @@ class ShiftOp<T>
 			
 			else
 			{
-				int spot = this.vec.conStorage.getSpot(this.pos);
-				cvalue = this.vec.conStorage.array.get(spot).getReference();
+				int spot = this.vec.conStorage.get().getSpot(this.pos);
+				cvalue = this.vec.conStorage.get().array.get(spot).getReference();
 				
 				if(cvalue instanceof Descriptor)
 				{
@@ -1084,13 +1084,13 @@ class ShiftOp<T>
 				{
 					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
 					
-					if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 					{
 						this.next.compareAndSet(null, sh);
 						
 						if(!(sh.equals(this.next.get())))
 						{
-							this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+							this.vec.conStorage.get().array.get(spot).compareAndSet(sh, cvalue, false, false);
 						}
 					}
 				}
@@ -1127,8 +1127,8 @@ class ShiftOp<T>
 				
 				if(!this.vec.segmented_contiguous)
 				{
-					SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-					cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
+					cvalue = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 					
 					if(cvalue instanceof Descriptor)
 					{
@@ -1149,13 +1149,13 @@ class ShiftOp<T>
 					{
 						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
 						
-						if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 						{
 							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
 							
 							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
 							{
-								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
 							}
 						}
 					}
@@ -1163,8 +1163,8 @@ class ShiftOp<T>
 				
 				else
 				{
-					int spot = this.vec.conStorage.getSpot(this.pos);
-					cvalue = this.vec.conStorage.array.get(spot).getReference();
+					int spot = this.vec.conStorage.get().getSpot(this.pos);
+					cvalue = this.vec.conStorage.get().array.get(spot).getReference();
 					
 					if(cvalue instanceof Descriptor)
 					{
@@ -1185,13 +1185,13 @@ class ShiftOp<T>
 					{
 						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
 						
-						if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+						if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 						{
 							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
 							
 							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
 							{
-								this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+								this.vec.conStorage.get().array.get(spot).compareAndSet(sh, cvalue, false, false);
 							}
 						}
 					}
@@ -1220,8 +1220,8 @@ class ShiftOp<T>
 			
 			if(!this.vec.segmented_contiguous)
 			{
-				SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-				cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
+				cvalue = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
 				if(cvalue instanceof Descriptor)
 				{
@@ -1237,13 +1237,13 @@ class ShiftOp<T>
 				{
 					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
 					
-					if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 					{
 						this.next.compareAndSet(null, sh);
 						
 						if(!(sh.equals(this.next.get())))
 						{
-							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
 						}
 					}
 				}
@@ -1251,8 +1251,8 @@ class ShiftOp<T>
 			
 			else
 			{
-				int spot = this.vec.conStorage.getSpot(this.pos);
-				cvalue = this.vec.conStorage.array.get(spot).getReference();
+				int spot = this.vec.conStorage.get().getSpot(this.pos);
+				cvalue = this.vec.conStorage.get().array.get(spot).getReference();
 				
 				if(cvalue instanceof Descriptor)
 				{
@@ -1268,13 +1268,13 @@ class ShiftOp<T>
 				{
 					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
 					
-					if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 					{
 						this.next.compareAndSet(null, sh);
 						
 						if(!(sh.equals(this.next.get())))
 						{
-							this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+							this.vec.conStorage.get().array.get(spot).compareAndSet(sh, cvalue, false, false);
 						}
 					}
 				}
@@ -1303,8 +1303,8 @@ class ShiftOp<T>
 				
 				if(!this.vec.segmented_contiguous)
 				{
-					SegSpot spot = this.vec.segStorage.getSpot(this.pos);
-					cvalue = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
+					cvalue = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 					
 					if(cvalue instanceof Descriptor)
 					{
@@ -1325,13 +1325,13 @@ class ShiftOp<T>
 					{
 						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
 						
-						if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
+						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 						{
 							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
 							
 							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
 							{
-								this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, cvalue);
 							}
 						}
 					}
@@ -1339,8 +1339,8 @@ class ShiftOp<T>
 				
 				else
 				{
-					int spot = this.vec.conStorage.getSpot(this.pos);
-					cvalue = this.vec.conStorage.array.get(spot).getReference();
+					int spot = this.vec.conStorage.get().getSpot(this.pos);
+					cvalue = this.vec.conStorage.get().array.get(spot).getReference();
 					
 					if(cvalue instanceof Descriptor)
 					{
@@ -1361,13 +1361,13 @@ class ShiftOp<T>
 					{
 						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
 						
-						if(this.vec.conStorage.array.get(spot).compareAndSet(cvalue, sh, false, false))
+						if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 						{
 							((Descriptor<T>) last).shift.next.compareAndSet(null, sh.shift);
 							
 							if(!(sh.shift.equals(((Descriptor<T>) last).shift.next.get())))
 							{
-								this.vec.conStorage.array.get(spot).compareAndSet(sh, cvalue, false, false);
+								this.vec.conStorage.get().array.get(spot).compareAndSet(sh, cvalue, false, false);
 							}
 						}
 					}
@@ -1390,13 +1390,13 @@ class ShiftOp<T>
 			if(!this.vec.segmented_contiguous)
 			{
 				SegSpot spot = this.vec.getSegSpot(tpos);
-				this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, sh.value);
+				this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, sh, sh.value);
 			}
 			
 			else
 			{
 				int spot = this.vec.getConSpot(tpos);
-				this.vec.conStorage.array.get(spot).compareAndSet(sh, sh.value, false, false);
+				this.vec.conStorage.get().array.get(spot).compareAndSet(sh, sh.value, false, false);
 			}
 			
 			sh = sh.next.get();
@@ -1491,7 +1491,7 @@ class Segmented<T>
 		
 		for(int i = 0; i < currentCapacity.get(); i++)
 		{
-			segments.get(0).set(i, this.vec.NotValue_Elem);;
+			segments.get(0).set(i, this.vec.NotValue_Elem);
 		}
 	}
 	
@@ -1620,20 +1620,17 @@ class Contiguous<T>
 		}
 		
 		// Check if the current Contiguous object is the same as the old reference.
-		if(this.vec.conStorage.equals(this))
+		if(this.vec.conStorage.compareAndSet(this, vnew))
 		{
 			// If so, copy all elements from the old reference into the new array.
 			for(int i = this.capacity - 1; i >= 0; i--)
 			{
-				vnew.copyValue(i);
+				this.vec.conStorage.get().copyValue(i);
 			}
-			
-			// Initialize the Vector class's Contiguous object with the new one.
-			this.vec.conStorage = vnew;
 		}
 		
 		// Return the current Contiguous object of the vector.
-		return this.vec.conStorage;
+		return this.vec.conStorage.get();
 	}
 	
 	/*
@@ -1705,8 +1702,8 @@ class Vector<T>
 	 * and the boolean value to represent which type of internal storage is
 	 * used for the current Vector class.
 	 */
-	Segmented<T> segStorage;
-	Contiguous<T> conStorage;
+	AtomicReference<Segmented<T>> segStorage;
+	AtomicReference<Contiguous<T>> conStorage;
 	AtomicInteger size = new AtomicInteger();
 	boolean segmented_contiguous;
 	
@@ -1734,12 +1731,12 @@ class Vector<T>
 		
 		if(!segmented_contiguous)
 		{
-			segStorage = new Segmented<T>(this, capacity);
+			segStorage.set(new Segmented<T>(this, capacity));
 		}
 		
 		else
 		{
-			conStorage = new Contiguous<T>(this, null, capacity);
+			conStorage.set(new Contiguous<T>(this, null, capacity));
 		}
 		
 		size.set(0);
@@ -1754,22 +1751,22 @@ class Vector<T>
 	{
 		if(!segmented_contiguous)
 		{
-			return segStorage.currentCapacity.get();
+			return segStorage.get().currentCapacity.get();
 		}
 
-		return conStorage.capacity;
+		return conStorage.get().capacity;
 	}
 	
 	// Gets the position of an element within a Segmented Element Model.
 	SegSpot getSegSpot(int pos)
 	{
-		return segStorage.getSpot(pos);
+		return segStorage.get().getSpot(pos);
 	}
 	
 	// Gets the position of an element within a Contiguous Element Model.
 	int getConSpot(int pos)
 	{
-		return conStorage.getSpot(pos);
+		return conStorage.get().getSpot(pos);
 	}
 	
 	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
@@ -1820,13 +1817,13 @@ class Vector<T>
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
-				Object expected = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				Object expected = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
 				if(expected.equals(NotValue_Elem))
 				{
 					Descriptor<T> ph = new Descriptor<T>(this, pos);
 					
-					if(segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, NotValue_Elem, ph))
+					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, NotValue_Elem, ph))
 					{
 						boolean res = ph.complete();
 						
@@ -1858,13 +1855,13 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object expected = conStorage.array.get(spot);
+				Object expected = conStorage.get().array.get(spot);
 				
 				if(expected.equals(NotValue_Elem))
 				{
 					Descriptor<T> ph = new Descriptor<T>(this, pos);
 					
-					if(conStorage.array.get(spot).compareAndSet(NotValue_Elem, ph, false, false))
+					if(conStorage.get().array.get(spot).compareAndSet(NotValue_Elem, ph, false, false))
 					{
 						boolean res = ph.complete();
 						
@@ -1910,13 +1907,13 @@ class Vector<T>
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
-				Object expected = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				Object expected = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
 				if(expected.equals(NotValue_Elem))
 				{
 					if(pos == 0)
 					{
-						if(segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
+						if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
 						{
 							this.size.getAndIncrement();
 							return 0;
@@ -1931,7 +1928,7 @@ class Vector<T>
 				
 					Descriptor<T> ph = new Descriptor<T>(this, pos, value);
 					
-					if(segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
+					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
 					{
 						boolean res = ph.push.complete();
 						
@@ -1967,13 +1964,13 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object expected = conStorage.array.get(spot);
+				Object expected = conStorage.get().array.get(spot);
 				
 				if(expected.equals(NotValue_Elem))
 				{
 					if(pos == 0)
 					{
-						if(conStorage.array.get(spot).compareAndSet(expected, value, false, false))
+						if(conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
 						{
 							this.size.getAndIncrement();
 							return 0;
@@ -1988,7 +1985,7 @@ class Vector<T>
 				
 					Descriptor<T> ph = new Descriptor<T>(this, pos, value);
 					
-					if(conStorage.array.get(spot).compareAndSet(expected, ph, false, false))
+					if(conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
 					{
 						boolean res = ph.push.complete();
 						
@@ -2047,9 +2044,9 @@ class Vector<T>
 				if(!segmented_contiguous)
 				{
 					SegSpot spot = getSegSpot(pos);
-					Object cur = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					Object cur = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 					
-					if(!cur.equals(NotValue_Elem) && segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, NotValue_Elem))
+					if(!cur.equals(NotValue_Elem) && segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, NotValue_Elem))
 					{
 						this.size.getAndDecrement();
 						Object value = cur;
@@ -2062,9 +2059,9 @@ class Vector<T>
 				else
 				{
 					int spot = getConSpot(pos);
-					Object cur = conStorage.array.get(spot);
+					Object cur = conStorage.get().array.get(spot);
 					
-					if(!cur.equals(NotValue_Elem) && conStorage.array.get(spot).compareAndSet(cur, NotValue_Elem, false, false))
+					if(!cur.equals(NotValue_Elem) && conStorage.get().array.get(spot).compareAndSet(cur, NotValue_Elem, false, false))
 					{
 						this.size.getAndDecrement();
 						Object value = cur;
@@ -2092,9 +2089,9 @@ class Vector<T>
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
-				Object cur = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				Object cur = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
-				if(cur.equals(NotValue_Elem) && segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
+				if(cur.equals(NotValue_Elem) && segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
 				{
 					this.size.getAndIncrement();
 					return pos;
@@ -2106,9 +2103,9 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object cur = conStorage.array.get(spot);
+				Object cur = conStorage.get().array.get(spot);
 				
-				if(cur.equals(NotValue_Elem) && conStorage.array.get(spot).compareAndSet(cur, value, false, false))
+				if(cur.equals(NotValue_Elem) && conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
 				{
 					this.size.getAndIncrement();
 					return pos;
@@ -2131,16 +2128,16 @@ class Vector<T>
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
-				Object value = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
-				segStorage.segments.get(spot.segIdx).set(spot.itemIdx, NotValue_Elem);
+				Object value = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				segStorage.get().segments.get(spot.segIdx).set(spot.itemIdx, NotValue_Elem);
 				return new Return_Elem<T>(true, value);
 			}
 			
 			else
 			{
 				int spot = getConSpot(pos);
-				Object value = conStorage.array.get(spot).getReference();
-				conStorage.array.get(spot).set(NotValue_Elem, false);
+				Object value = conStorage.get().array.get(spot).getReference();
+				conStorage.get().array.get(spot).set(NotValue_Elem, false);
 				return new Return_Elem<T>(true, value);
 			}
 		}
@@ -2159,13 +2156,13 @@ class Vector<T>
 		if(!segmented_contiguous)
 		{
 			SegSpot spot = getSegSpot(pos);
-			segStorage.segments.get(spot.segIdx).set(spot.itemIdx, value);
+			segStorage.get().segments.get(spot.segIdx).set(spot.itemIdx, value);
 		}
 		
 		else
 		{
 			int spot = getConSpot(pos);
-			conStorage.array.get(spot).set(value, false);
+			conStorage.get().array.get(spot).set(value, false);
 		}
 		
 		return pos;
@@ -2189,13 +2186,13 @@ class Vector<T>
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
-				value = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+				value = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			}
 			
 			else
 			{
 				int spot = getConSpot(pos);
-				value = conStorage.array.get(spot).getReference();
+				value = conStorage.get().array.get(spot).getReference();
 			}
 			
 			if(value instanceof Descriptor)
@@ -2227,7 +2224,7 @@ class Vector<T>
 				if(!segmented_contiguous)
 				{
 					SegSpot spot = getSegSpot(pos);
-					value = segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+					value = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 					
 					if(value instanceof Descriptor)
 					{
@@ -2236,7 +2233,7 @@ class Vector<T>
 					
 					else if(value.equals(old_Elem))
 					{
-						if(segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, new_Elem))
+						if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, new_Elem))
 						{
 							return new Return_Elem<T>(true, old_Elem);
 						}
@@ -2251,7 +2248,7 @@ class Vector<T>
 				else
 				{
 					int spot = getConSpot(pos);
-					value = conStorage.array.get(spot).getReference();
+					value = conStorage.get().array.get(spot).getReference();
 					
 					if(value instanceof Descriptor)
 					{
@@ -2260,7 +2257,7 @@ class Vector<T>
 					
 					else if(value.equals(old_Elem))
 					{
-						if(conStorage.array.get(spot).compareAndSet(value, new_Elem, false, false))
+						if(conStorage.get().array.get(spot).compareAndSet(value, new_Elem, false, false))
 						{
 							return new Return_Elem<T>(true, old_Elem);
 						}

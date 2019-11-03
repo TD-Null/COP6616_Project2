@@ -69,22 +69,6 @@ enum Descr
 	SHIFT;
 }
 
-/*
- * Contains the type of operation to complete during an
- * announceOp(), being 1) Wait-free push back, 2) Wait-free
- * pop back, 3) Compare-and-Swap push back, 4) Compare-and-swap
- * pop back, 5) Condition write operation, and 6) Shift operation.
- */
-enum Op
-{
-	WFPUSH,
-	WFPOP,
-	CASPUSH,
-	CASPOP,
-	WRITE,
-	SHIFT;
-}
-
 class PopDescr<T>
 {
 	Vector<T> vec;
@@ -468,7 +452,7 @@ class Descriptor<T>
 		push = new PushDescr<T>(vec, value, pos);
 	}
 	
-	// Constructor for a PopSub Descriptor.
+	// Constructor for a WriteHelper Descriptor.
 	Descriptor(WriteOp<T> parent, Node<T> value)
 	{
 		type = Descr.WRITE;
@@ -596,11 +580,6 @@ class WFPopOp<T>
 			{
 				((Descriptor<T>) expected).complete();
 			}
-			
-			else
-			{
-				pos++;
-			}
 		}
 		
 		else
@@ -633,11 +612,6 @@ class WFPopOp<T>
 			else if(expected instanceof Descriptor)
 			{
 				((Descriptor<T>) expected).complete();
-			}
-			
-			else
-			{
-				pos++;
 			}
 		}
 		
@@ -711,11 +685,6 @@ class WFPushOp<T>
 			{
 				((Descriptor<T>) expected).complete();
 			}
-			
-			else
-			{
-				pos++;
-			}
 		}
 		
 		else
@@ -768,11 +737,6 @@ class WFPushOp<T>
 			{
 				((Descriptor<T>) expected).complete();
 			}
-			
-			else
-			{
-				pos++;
-			}
 		}
 		
 		return 0;
@@ -810,8 +774,6 @@ class CASPopOp<T>
 					Object value = cur;
 					return new Return_Elem<T>(true, value);
 				}
-				
-				pos--;
 			}
 			
 			else
@@ -825,8 +787,6 @@ class CASPopOp<T>
 					Object value = cur;
 					return new Return_Elem<T>(true, value);
 				}
-				
-				pos--;
 			}
 		}
 		
@@ -859,8 +819,6 @@ class CASPushOp<T>
 				this.vec.size.getAndIncrement();
 				return pos;
 			}
-			
-			pos++;
 		}
 		
 		else
@@ -873,8 +831,6 @@ class CASPushOp<T>
 				this.vec.size.getAndIncrement();
 				return pos;
 			}
-			
-			pos++;
 		}
 		
 		return 0;
@@ -895,9 +851,86 @@ class WriteOp<T>
 		this.pos = pos;
 		this.old_Elem = old_Elem;
 		this.new_Elem = new_Elem;
+		this.child.set(null);
 	}
 	
-	
+	@SuppressWarnings("unchecked")
+	Return_Elem<T> helpComplete()
+	{
+		if(!this.vec.segmented_contiguous)
+		{
+			SegSpot spot = this.vec.getSegSpot(this.pos);
+			Object value = this.vec.segStorage.segments.get(spot.segIdx).get(spot.itemIdx);
+			
+			if(value instanceof Descriptor)
+			{
+				((Descriptor<T>) value).complete();
+			}
+			
+			else
+			{
+				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
+				
+				if(this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, write))
+				{
+					this.child.compareAndSet(null, write);
+					
+					if(this.child.get().equals(write))
+					{
+						Node<T> currentValue = write.value;
+						
+						if(currentValue.equals(old_Elem))
+						{
+							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
+						}
+						
+						else
+						{
+							this.vec.segStorage.segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
+						}
+					}
+				}
+			}
+		}
+		
+		else
+		{
+			int spot = this.vec.getConSpot(this.pos);
+			Object value = this.vec.conStorage.array.get(spot).getReference();
+			
+			if(value instanceof Descriptor)
+			{
+				((Descriptor<T>) value).complete();
+			}
+			
+			else
+			{
+				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
+				
+				if(this.vec.conStorage.array.get(spot).compareAndSet(value, write, false, false))
+				{
+					this.child.compareAndSet(null, write);
+					
+					if(this.child.get().equals(write))
+					{
+						Node<T> currentValue = write.value;
+						
+						if(currentValue.equals(old_Elem))
+						{
+							this.vec.conStorage.array.get(spot).compareAndSet(write, new_Elem, false, false);
+						}
+						
+						else
+						{
+							this.vec.conStorage.array.get(spot).compareAndSet(write, currentValue, false, false);
+						}
+					}
+				}
+			}
+		}
+		
+		return new Return_Elem<T>(false, null);
+	}
 }
 
 class WriteHelper<T>
@@ -1399,11 +1432,6 @@ class ShiftOp<T>
 	}
 }
 
-class Operation
-{
-	
-}
-
 class AnnouncementTable
 {
 	
@@ -1742,9 +1770,34 @@ class Vector<T>
 		return conStorage.getSpot(pos);
 	}
 	
-	void announceOp()
+	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
 	{
-		
+		return operation.helpComplete();
+	}
+	
+	int announceWFPushOp(WFPushOp<T> operation)
+	{
+		return operation.helpComplete();
+	}
+	
+	Return_Elem<T> announceCASPopOp(CASPopOp<T> operation)
+	{
+		return operation.helpComplete();
+	}
+	
+	int announceCASPushOp(CASPushOp<T> operation)
+	{
+		return operation.helpComplete();
+	}
+	
+	Return_Elem<T> announceOp(WriteOp<T> operation)
+	{
+		return operation.helpComplete();
+	}
+	
+	void announceOp(ShiftOp<T> operation)
+	{
+		operation.helpComplete();
 	}
 
 	/*

@@ -1642,20 +1642,20 @@ class Contiguous<T>
 	 */
 	void copyValue(int pos)
 	{
-		//System.out.println(pos);
 		/*
-		 * Check first if the value of the element is NotCopied, signifying
-		 * that the position hasn't had the element copied over the position.
+		 * Check first if the value is not markedd or the element is NotCopied, 
+		 * signifying that the position hasn't had the element copied over the position.
 		 */
-		if(this.old.array.get(pos).equals(this.vec.NotCopied_Elem))
+		if(this.old.array.get(pos).isMarked() || this.old.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
 		{
 			// Copy the element into the position of the array.
 			this.old.copyValue(pos);
 		}
 		
+		// Get the current element within the old array at the given position.
 		Object v = this.old.array.get(pos).getReference();
 		
-		// Set the resize bit of the Node element to true or 1.
+		// Set the resize bit of the Node element within the old array to 1.
 		this.old.array.get(pos).attemptMark(v, true);
 		
 		this.array.get(pos).compareAndSet(this.vec.NotCopied_Elem, v, false, false);
@@ -1682,7 +1682,7 @@ class Contiguous<T>
 		 * If a thread sees that the position of the array is NotCopied, then
 		 * copy the value from the old referenced Contiguous object.
 		 */
-		if(this.array.get(pos).equals(this.vec.NotCopied_Elem))
+		if(this.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
 		{
 			this.copyValue(pos);
 		}

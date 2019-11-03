@@ -841,11 +841,11 @@ class WriteOp<T>
 {
 	Vector<T> vec;
 	int pos;
-	Node<T> old_Elem;
-	Node<T> new_Elem;
+	Object old_Elem;
+	Object new_Elem;
 	AtomicReference<WriteHelper<T>> child = new AtomicReference<WriteHelper<T>>();
 	
-	WriteOp(Vector<T> vec, int pos, Node<T> old_Elem, Node<T> new_Elem)
+	WriteOp(Vector<T> vec, int pos, Object old_Elem, Object new_Elem)
 	{
 		this.vec= vec;
 		this.pos = pos;
@@ -1028,7 +1028,8 @@ class ShiftOp<T>
 		{
 			if(failures++ == this.vec.limit)
 			{
-				//this.vec.announceOp(this);
+				this.vec.announceShiftOp(this);
+				return;
 			}
 			
 			Object cvalue;
@@ -1118,7 +1119,7 @@ class ShiftOp<T>
 			{
 				if(failures++ == this.vec.limit)
 				{
-					//this.vec.announceOp(this);
+					this.vec.announceShiftOp(this);
 					return;
 				}
 				
@@ -1790,12 +1791,12 @@ class Vector<T>
 		return operation.helpComplete();
 	}
 	
-	Return_Elem<T> announceOp(WriteOp<T> operation)
+	Return_Elem<T> announceWriteOp(WriteOp<T> operation)
 	{
 		return operation.helpComplete();
 	}
 	
-	void announceOp(ShiftOp<T> operation)
+	void announceShiftOp(ShiftOp<T> operation)
 	{
 		operation.helpComplete();
 	}
@@ -1892,7 +1893,7 @@ class Vector<T>
 			}
 		}
 		
-		return new Return_Elem<T>(false, null);
+		return announceWFPopOp(new WFPopOp<T>(this));
 	}
 	
 	/*
@@ -2020,7 +2021,7 @@ class Vector<T>
 			}
 		}
 		
-		return 0;
+		return announceWFPushOp(new WFPushOp<T>(this, value));
 	}
 	
 	Return_Elem<T> CAS_popBack()
@@ -2032,7 +2033,7 @@ class Vector<T>
 		{
 			if(failures++ > limit)
 			{
-				break;
+				return announceCASPopOp(new CASPopOp<T>(this));
 			}
 			
 			else if(pos < 0)
@@ -2073,8 +2074,6 @@ class Vector<T>
 				}
 			}
 		}
-		
-		return new Return_Elem<T>(false, null);
 	}
 	
 	int CAS_pushBack(Node<T> value)
@@ -2086,7 +2085,7 @@ class Vector<T>
 		{
 			if(failures++ > limit)
 			{
-				break;
+				return announceCASPushOp(new CASPushOp<T>(this, value));
 			}
 			
 			if(!segmented_contiguous)
@@ -2117,8 +2116,6 @@ class Vector<T>
 				pos++;
 			}
 		}
-		
-		return 0;
 	}
 	
 	/*
@@ -2275,7 +2272,7 @@ class Vector<T>
 				}
 			}
 			
-			//return announceOp();
+			return announceWriteOp(new WriteOp<T>(this, pos, old_Elem, new_Elem));
 		}
 		
 		return new Return_Elem<T>(false, null);

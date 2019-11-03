@@ -1614,7 +1614,7 @@ class Contiguous<T>
 			vnew.array.set(i, new AtomicMarkableReference<Object>(this.vec.NotCopied_Elem, false));
 		}
 		
-		for(int i = this.capacity; i < array.length(); i++)
+		for(int i = this.capacity; i < this.capacity * 2; i++)
 		{
 			vnew.array.set(i, new AtomicMarkableReference<Object>(this.vec.NotValue_Elem, false));
 		}
@@ -1643,10 +1643,11 @@ class Contiguous<T>
 	void copyValue(int pos)
 	{
 		/*
-		 * Check first if the value is not markedd or the element is NotCopied, 
-		 * signifying that the position hasn't had the element copied over the position.
+		 * Check first if the value is not marked or the element is NotCopied, 
+		 * signifying that the position hasn't had the element copied over the 
+		 * position.
 		 */
-		if(this.old.array.get(pos).isMarked() || this.old.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
+		if(!this.old.array.get(pos).isMarked() || this.old.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
 		{
 			// Copy the element into the position of the array.
 			this.old.copyValue(pos);

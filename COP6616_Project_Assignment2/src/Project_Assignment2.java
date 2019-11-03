@@ -1702,8 +1702,8 @@ class Vector<T>
 	 * and the boolean value to represent which type of internal storage is
 	 * used for the current Vector class.
 	 */
-	AtomicReference<Segmented<T>> segStorage;
-	AtomicReference<Contiguous<T>> conStorage;
+	AtomicReference<Segmented<T>> segStorage = new AtomicReference<Segmented<T>>();
+	AtomicReference<Contiguous<T>> conStorage = new AtomicReference<Contiguous<T>>();
 	AtomicInteger size = new AtomicInteger();
 	boolean segmented_contiguous;
 	

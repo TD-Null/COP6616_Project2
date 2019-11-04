@@ -1717,7 +1717,7 @@ class Vector<T>
 	Node<Integer> NotValue_Elem = new Node<Integer>(NotValue);
 	
 	// Contains the limit of failures when a thread attempts to do an operation.
-	int limit = 1000;
+	int limit = 10000;
 	
 	/*
 	 * In the constructor, a boolean value is given to signify which type of
@@ -1767,6 +1767,11 @@ class Vector<T>
 	int getConSpot(int pos)
 	{
 		return conStorage.get().getSpot(pos);
+	}
+	
+	void checkAnnouncement()
+	{
+		
 	}
 	
 	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
@@ -2390,6 +2395,9 @@ class VectorThread<T> extends Thread
 		// The thread will use up to the number of operations given to acccess the vector.
 		for(int i = 0; i < num_operations; i++)
 		{
+			// Check if there is currently announcement by 
+			Project_Assignment2.vector.checkAnnouncement();
+			
 			// Get a number of either 1 to 3 from the random number generator.
 			random = (int) (Math.random() * 3) + 1;
 			

@@ -191,13 +191,12 @@ class PopDescr<T>
 class PopSubDescr<T>
 {
 	PopDescr<T> parent;
-	Node<T> value;
+	Object value;
 	
-	@SuppressWarnings("unchecked")
 	PopSubDescr(PopDescr<T> parent, Object value)
 	{
 		this.parent = parent;
-		this.value = (Node<T>) value;
+		this.value = value;
 	}
 	
 	boolean complete()
@@ -378,7 +377,7 @@ class ShiftDescr<T>
 		
 		if(!this.op.vec.segmented_contiguous)
 		{
-			SegSpot spot = this.op.vec.getSegSpot(pos);
+			SegSpot spot = this.op.vec.getSegSpot(this.pos);
 			
 			if(isAssoc)
 			{
@@ -394,7 +393,7 @@ class ShiftDescr<T>
 		
 		else
 		{
-			int spot = this.op.vec.getConSpot(pos);
+			int spot = this.op.vec.getConSpot(this.pos);
 			
 			if(isAssoc)
 			{
@@ -498,12 +497,11 @@ class Descriptor<T>
 	}
 	
 	// Function that gets the Node value contained within the Descriptor Object.
-	@SuppressWarnings("unchecked")
-	Node<T> getValue()
+	Object getValue()
 	{
 		if(type == Descr.POP)
 		{
-			return ((PopSubDescr<T>) pop.child.get()).value;
+			return pop.vec.NotValue_Elem;
 		}
 		
 		else if(type == Descr.POPSUB)
@@ -1296,7 +1294,7 @@ class ShiftOp<T>
 			{
 				this.incomplete.set(false);
 			}
-			
+
 			while(((Descriptor<T>) last).shift.next.get() == null)
 			{
 				Object cvalue;
@@ -1431,11 +1429,6 @@ class ShiftOp<T>
 			}
 		}
 	}
-}
-
-class AnnouncementTable
-{
-	
 }
 
 /*
@@ -1639,24 +1632,28 @@ class Contiguous<T>
 	 */
 	void copyValue(int pos)
 	{
-		/*
-		 * Check first if the value is not marked or the element is NotCopied, 
-		 * signifying that the position hasn't had the element copied over the 
-		 * position.
-		 */
-		if(!this.old.array.get(pos).isMarked() || this.old.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
+		// Check if the old contiguous memory region isn't NULL.
+		if(this.old != null)
 		{
-			// Copy the element into the position of the array.
-			this.old.copyValue(pos);
+			/*
+			 * Check first if the value is not marked or the element is NotCopied, 
+			 * signifying that the position hasn't had the element copied over the 
+			 * position.
+			 */
+			if(!this.old.array.get(pos).isMarked() || this.old.array.get(pos).getReference().equals(this.vec.NotCopied_Elem))
+			{
+				// Copy the element into the position of the array.
+				this.old.copyValue(pos);
+			}
+			
+			// Get the current element within the old array at the given position.
+			Object v = this.old.array.get(pos).getReference();
+			
+			// Set the resize bit of the Node element within the old array to 1.
+			this.old.array.get(pos).attemptMark(v, true);
+			
+			this.array.get(pos).compareAndSet(this.vec.NotCopied_Elem, v, false, false);
 		}
-		
-		// Get the current element within the old array at the given position.
-		Object v = this.old.array.get(pos).getReference();
-		
-		// Set the resize bit of the Node element within the old array to 1.
-		this.old.array.get(pos).attemptMark(v, true);
-		
-		this.array.get(pos).compareAndSet(this.vec.NotCopied_Elem, v, false, false);
 	}
 	
 	/*
@@ -1717,7 +1714,10 @@ class Vector<T>
 	Node<Integer> NotValue_Elem = new Node<Integer>(NotValue);
 	
 	// Contains the limit of failures when a thread attempts to do an operation.
-	int limit = 10000;
+	int limit = 100000;
+	
+	// Contains the announcements made by threads that have failed to finish executing their operation.
+	AtomicReference<Queue<Object>> announcementTable = new AtomicReference<Queue<Object>>();
 	
 	/*
 	 * In the constructor, a boolean value is given to signify which type of
@@ -1740,6 +1740,8 @@ class Vector<T>
 		}
 		
 		size.set(0);
+		
+		announcementTable.set(new LinkedList<Object>());
 	}
 	
 	/*
@@ -1769,39 +1771,96 @@ class Vector<T>
 		return conStorage.get().getSpot(pos);
 	}
 	
+	// Function that checks if a thread has made an announcement to help complete an operation.
+	@SuppressWarnings("unchecked")
 	void checkAnnouncement()
 	{
+		/*
+		 * While the announcement table isn't empty, have all threads help
+		 * complete operations by threads that have failed to execute them
+		 * based on the contents of the announcement.
+		 */
+		while(!announcementTable.get().isEmpty())
+		{
+			
+			Object operation = announcementTable.get().peek();
+			
+			if(operation != null)
+			{
+				if(operation instanceof WFPopOp)
+				{
+					((WFPopOp<T>) operation).helpComplete();
+				}
+				
+				else if(operation instanceof WFPushOp)
+				{
+					((WFPushOp<T>) operation).helpComplete();
+				}
+				
+				else if(operation instanceof CASPopOp)
+				{
+					((CASPopOp<T>) operation).helpComplete();
+				}
+				
+				else if(operation instanceof CASPushOp)
+				{
+					((CASPushOp<T>) operation).helpComplete();
+				}
+				
+				else if(operation instanceof WriteOp)
+				{
+					((WriteOp<T>) operation).helpComplete();
+				}
+				
+				else if(operation instanceof ShiftOp)
+				{
+					((ShiftOp<T>) operation).helpComplete();
+				}
+			}
+			
+			else
+			{
+				break;
+			}
+		}
 		
+		return;
 	}
 	
 	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
 	{
-		return operation.helpComplete();
+		announcementTable.get().add(operation);
+		return new Return_Elem<T>(false, null);
 	}
 	
 	int announceWFPushOp(WFPushOp<T> operation)
 	{
-		return operation.helpComplete();
+		announcementTable.get().add(operation);
+		return 0;
 	}
 	
 	Return_Elem<T> announceCASPopOp(CASPopOp<T> operation)
 	{
-		return operation.helpComplete();
+		announcementTable.get().add(operation);
+		return new Return_Elem<T>(false, null);
 	}
 	
 	int announceCASPushOp(CASPushOp<T> operation)
 	{
-		return operation.helpComplete();
+		announcementTable.get().add(operation);
+		return 0;
 	}
 	
 	Return_Elem<T> announceWriteOp(WriteOp<T> operation)
 	{
-		return operation.helpComplete();
+		announcementTable.get().add(operation);
+		return new Return_Elem<T>(false, null);
 	}
 	
 	void announceShiftOp(ShiftOp<T> operation)
 	{
-		operation.helpComplete();
+		announcementTable.get().add(operation);
+		return;
 	}
 
 	/*
@@ -1834,7 +1893,7 @@ class Vector<T>
 						
 						if(res)
 						{
-							Object value = ph.pop.child.get();
+							Object value = ph.getValue();
 							this.size.getAndDecrement();
 							return new Return_Elem<T>(true, value);
 						}
@@ -1860,7 +1919,7 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object expected = conStorage.get().array.get(spot);
+				Object expected = conStorage.get().array.get(spot).getReference();
 				
 				if(expected.equals(NotValue_Elem))
 				{
@@ -1872,7 +1931,7 @@ class Vector<T>
 						
 						if(res)
 						{
-							Object value = ((PopSubDescr<T>) ph.pop.child.get()).value;
+							Object value = ph.getValue();
 							this.size.getAndDecrement();
 							return new Return_Elem<T>(true, value);
 						}
@@ -1969,7 +2028,7 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object expected = conStorage.get().array.get(spot);
+				Object expected = conStorage.get().array.get(spot).getReference();
 				
 				if(expected.equals(NotValue_Elem))
 				{
@@ -2064,7 +2123,7 @@ class Vector<T>
 				else
 				{
 					int spot = getConSpot(pos);
-					Object cur = conStorage.get().array.get(spot);
+					Object cur = conStorage.get().array.get(spot).getReference();
 					
 					if(!cur.equals(NotValue_Elem) && conStorage.get().array.get(spot).compareAndSet(cur, NotValue_Elem, false, false))
 					{
@@ -2108,7 +2167,7 @@ class Vector<T>
 			else
 			{
 				int spot = getConSpot(pos);
-				Object cur = conStorage.get().array.get(spot);
+				Object cur = conStorage.get().array.get(spot).getReference();
 				
 				if(cur.equals(NotValue_Elem) && conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
 				{
@@ -2303,7 +2362,9 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 18: 
+	 * Algorithm 18: An erase function that erase the Node element at the
+	 * given position. The elements must be shifted from the tail to the
+	 * position of the Vector's internal storage or array of elements.
 	 */
 	boolean eraseAt(int pos)
 	{
@@ -2409,25 +2470,22 @@ class VectorThread<T> extends Thread
 			 */
 			if(random == 1)
 			{
-				if(TO_Cntr <= (num_operations * TO_Ratio))
+				if(TO_Ratio != 0 && TO_Cntr <= (num_operations * TO_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using TO");
 					tail_Operations();
 					
 					TO_Cntr++;
 				}
 				
-				else if(RA_Cntr <= (num_operations * RA_Ratio))
+				else if(RA_Ratio != 0 && RA_Cntr <= (num_operations * RA_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using RAO");
 					randomAccess_Operations();
 					
 					RA_Cntr++;
 				}
 				
-				else if(MP_Cntr <= (num_operations * MP_Ratio))
+				else if(MP_Ratio != 0 && MP_Cntr <= (num_operations * MP_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using MPO");
 					multiPosition_Operations();
 					
 					MP_Cntr++;
@@ -2442,25 +2500,22 @@ class VectorThread<T> extends Thread
 			 */
 			else if(random == 2)
 			{
-				if(RA_Cntr <= (num_operations * RA_Ratio))
+				if(RA_Ratio != 0 && RA_Cntr <= (num_operations * RA_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using RAO");
 					randomAccess_Operations();
 					
 					RA_Cntr++;
 				}
 				
-				else if(TO_Cntr <= (num_operations * TO_Ratio))
+				else if(TO_Ratio != 0 && TO_Cntr <= (num_operations * TO_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using TO");
 					tail_Operations();
 					
 					TO_Cntr++;
 				}
 				
-				else if(MP_Cntr <= (num_operations * MP_Ratio))
+				else if(MP_Ratio != 0 && MP_Cntr <= (num_operations * MP_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using MPO");
 					multiPosition_Operations();
 					
 					MP_Cntr++;
@@ -2475,25 +2530,22 @@ class VectorThread<T> extends Thread
 			 */
 			else if(random == 3)
 			{
-				if(MP_Cntr <= (num_operations * MP_Ratio))
+				if(MP_Ratio != 0 && MP_Cntr <= (num_operations * MP_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using MPO");
 					multiPosition_Operations();
 					
 					MP_Cntr++;
 				}
 				
-				else if(TO_Cntr <= (num_operations * TO_Ratio))
+				else if(TO_Ratio != 0 && TO_Cntr <= (num_operations * TO_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using TO");
 					tail_Operations();
 					
 					TO_Cntr++;
 				}
 				
-				else if(RA_Cntr <= (num_operations * RA_Ratio))
+				else if(RA_Ratio != 0 && RA_Cntr <= (num_operations * RA_Ratio))
 				{
-					//System.out.println("Thread " + threadIndex + " using RAO");
 					randomAccess_Operations();
 					
 					RA_Cntr++;
@@ -2571,7 +2623,7 @@ class VectorThread<T> extends Thread
 		int random = rand.nextInt(2);
 		
 		// Get a random position from the vector based on size.
-		int random_pos = (int) (Math.random() * Project_Assignment2.vector.getCapacity()) + 1;
+		int random_pos = (int) (Math.random() * Project_Assignment2.vector.getCapacity());
 		
 		/*
 		 * If the number is 0, use a at() operation on the vector if the number
@@ -2719,11 +2771,11 @@ public class Project_Assignment2
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 1250;
+	public static int max_operations = 10;
 	
 	// Contains the ratios for tail operations, random access operations, and multi-position operations during multithreading.
-	public static double TO_Ratio = 0.5;
-	public static double RA_Ratio = 0.5;
+	public static double TO_Ratio = 0.05;
+	public static double RA_Ratio = 0.95;
 	public static double MP_Ratio = 0;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
@@ -2733,7 +2785,7 @@ public class Project_Assignment2
 	public static boolean segmented_contiguous = false;
 	
 	// Contains the initial capacity to be used when allocating a new Vector object.
-	public static int capacity = 1024;
+	public static int capacity = 2048;
 	
 	// Contains the Vector object to be accessed by multiple threads.
 	public static Vector<Integer> vector;

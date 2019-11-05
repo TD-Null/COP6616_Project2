@@ -69,6 +69,10 @@ enum Descr
 	SHIFT;
 }
 
+/*
+ * A Descriptor object for the pop back operation that removes an element
+ * at the tail of the vector's elements.
+ */
 class PopDescr<T>
 {
 	Vector<T> vec;
@@ -82,6 +86,12 @@ class PopDescr<T>
 		child.set(null);
 	}
 	
+	/*
+	 * Algorithm 7: The pop Descriptor object helps complete the pop back
+	 * operation by check if it is still associated with its child Descriptor
+	 * object. If so, then the element is popped from the tail of the vector.
+	 * If not, then it replaces the Descriptor object with its original value.
+	 */
 	@SuppressWarnings("unchecked")
 	boolean complete()
 	{
@@ -188,6 +198,10 @@ class PopDescr<T>
 	}
 }
 
+/*
+ * A Descriptor object that is the child of the pop Descriptor object
+ * used to help the pop back operation.
+ */
 class PopSubDescr<T>
 {
 	PopDescr<T> parent;
@@ -199,6 +213,12 @@ class PopSubDescr<T>
 		this.value = value;
 	}
 	
+	/*
+	 * Algorithm 8: The pop-sub Descriptor object helps complete the pop back
+	 * operation by check if it is still associated with its parent Descriptor
+	 * object. If so, then the element is popped from the tail of the vector.
+	 * If not, then it replaces the Descriptor object with its original value.
+	 */
 	boolean complete()
 	{
 		if(!this.parent.vec.segmented_contiguous)
@@ -235,6 +255,10 @@ class PopSubDescr<T>
 	}
 }
 
+/*
+ * A Descriptor object for the push back operation that inserts an element
+ * at the tail of the vector's elements.
+ */
 class PushDescr<T>
 {
 	Vector<T> vec;
@@ -250,6 +274,11 @@ class PushDescr<T>
 		this.state.set(State.UNDECIDED);
 	}
 	
+	/*
+	 * Algorithm 10: The push Descriptor object completes the push back operation
+	 * by check if the tail of the vector and the end of the vector's elements are
+	 * valid for pushing an element to the tail of the vector.
+	 */
 	@SuppressWarnings("unchecked")
 	boolean complete()
 	{
@@ -342,6 +371,11 @@ class PushDescr<T>
 	}
 }
 
+/*
+ * A Descriptor object used for the multi-position operations or shift operations.
+ * Contains the original values of the index within the vector's elements and is
+ * then replace by their logic values to finish the shift operation.
+ */
 class ShiftDescr<T>
 {
 	ShiftOp<T> op;
@@ -359,6 +393,12 @@ class ShiftDescr<T>
 		this.next.set(null);
 	}
 	
+	/*
+	 * Algorithm 21: If a thread sees the shift Descriptor object, it helps
+	 * complete the operation first if it is associated with the current
+	 * shift operation. If not, then it replaces the Descriptor object with
+	 * its original value.
+	 */
 	boolean complete()
 	{
 		boolean isAssoc = false;
@@ -528,6 +568,7 @@ class Descriptor<T>
 	}
 }
 
+// A wait-free pop back operation announcement.
 class WFPopOp<T>
 {
 	Vector<T> vec;
@@ -617,6 +658,7 @@ class WFPopOp<T>
 	}
 }
 
+// A wait-free push back operation announcement.
 class WFPushOp<T>
 {
 	Vector<T> vec;
@@ -741,6 +783,7 @@ class WFPushOp<T>
 	}
 }
 
+// A compare and set pop back operation announcement.
 class CASPopOp<T>
 {
 	Vector<T> vec;
@@ -792,6 +835,7 @@ class CASPopOp<T>
 	}
 }
 
+// A compare and set push back operation announcement.
 class CASPushOp<T>
 {
 	Vector<T> vec;
@@ -835,6 +879,7 @@ class CASPushOp<T>
 	}
 }
 
+// A conditional write operation announcement.
 class WriteOp<T>
 {
 	Vector<T> vec;
@@ -931,6 +976,10 @@ class WriteOp<T>
 	}
 }
 
+/*
+ * A Descriptor object used for a conditional write operation announcement
+ * to help complete the operation.
+ */
 class WriteHelper<T>
 {
 	WriteOp<T> parent;
@@ -978,6 +1027,11 @@ class WriteHelper<T>
 	}
 }
 
+/*
+ * Shift operation that inserts Descriptor objects from the given position 
+ * to the end of the vector to shift values based on where it was an insertAt() 
+ * method or an eraseAt() method.
+ */
 class ShiftOp<T>
 {
 	Vector<T> vec;
@@ -1010,6 +1064,12 @@ class ShiftOp<T>
 		this.value = shift.value;
 	}
 	
+	/*
+	 * Algorithm 19: Function that completes the shift operation by inserting
+	 * the Descriptor objects starting at the given position first and then all 
+	 * other positions after the given position up to the end of the vector, which
+	 * would find a NotValue.
+	 */
 	@SuppressWarnings("unchecked")
 	void complete()
 	{
@@ -1202,6 +1262,10 @@ class ShiftOp<T>
 		}
 	}
 	
+	/*
+	 * A helpComplete() function for an announcement of the shift operation.
+	 * Similar to the complete() function without the failure counter.
+	 */
 	@SuppressWarnings("unchecked")
 	void helpComplete()
 	{
@@ -1378,6 +1442,10 @@ class ShiftOp<T>
 		}
 	}
 	
+	/*
+	 * Algorithm 20: Replaces the Descriptor objects with their logic values, once the shift
+	 * operation is done inserting all the Descriptor objects.
+	 */
 	@SuppressWarnings("unchecked")
 	void clean()
 	{
@@ -1401,6 +1469,11 @@ class ShiftOp<T>
 		}
 	}
 	
+	/*
+	 * Function that determines how the logical values are set from the Descriptor objects
+	 * based on whether the shift operation was created by an insertAt() method or an eraseAt()
+	 * method.
+	 */
 	Node<T> valueGetter(ShiftDescr<T> sh)
 	{
 		if(!shiftType)
@@ -1782,7 +1855,7 @@ class Vector<T>
 		 */
 		while(!announcementTable.get().isEmpty())
 		{
-			
+			// Check first that the operation from the head of the queue isn't NULL.
 			Object operation = announcementTable.get().peek();
 			
 			if(operation != null)
@@ -1827,36 +1900,42 @@ class Vector<T>
 		return;
 	}
 	
+	// Make an announcement for a wait-free pop back operation.
 	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
 	{
 		announcementTable.get().add(operation);
 		return new Return_Elem<T>(false, null);
 	}
 	
+	// Make an announcement for a wait-free push back operation.
 	int announceWFPushOp(WFPushOp<T> operation)
 	{
 		announcementTable.get().add(operation);
 		return 0;
 	}
 	
+	// Make an announcement for a compare and set pop back operation.
 	Return_Elem<T> announceCASPopOp(CASPopOp<T> operation)
 	{
 		announcementTable.get().add(operation);
 		return new Return_Elem<T>(false, null);
 	}
 	
+	// Make an announcement for a compare and set push back operation.
 	int announceCASPushOp(CASPushOp<T> operation)
 	{
 		announcementTable.get().add(operation);
 		return 0;
 	}
 	
+	// Make an announcement for a conditional write operation.
 	Return_Elem<T> announceWriteOp(WriteOp<T> operation)
 	{
 		announcementTable.get().add(operation);
 		return new Return_Elem<T>(false, null);
 	}
 	
+	// Make an announcement for a shift operation.
 	void announceShiftOp(ShiftOp<T> operation)
 	{
 		announcementTable.get().add(operation);
@@ -1864,7 +1943,9 @@ class Vector<T>
 	}
 
 	/*
-	 * Algorithm 6: 
+	 * Algorithm 6: A wait-free pop back operation that pops the
+	 * element from the tail of the Vector's internal storage or
+	 * array of elements.
 	 */
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> WF_popBack()
@@ -1959,7 +2040,9 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 9:
+	 * Algorithm 9: A wait-free push back operation that pushes the
+	 * given Node value onto the tail of the Vector's internal storage or
+	 * array of elements.
 	 */
 	@SuppressWarnings("unchecked")
 	int WF_pushBack(Node<T> value)
@@ -2086,6 +2169,12 @@ class Vector<T>
 		return announceWFPushOp(new WFPushOp<T>(this, value));
 	}
 	
+	/*
+	 * Algorithm 11: Compare and Set pop back operation that compares
+	 * the value at the tail of the Vector's internal storage, and if
+	 * valid, the size of the Vector is decremented and the Node value
+	 * is popped from the Vector's memory.
+	 */
 	Return_Elem<T> CAS_popBack()
 	{
 		int pos = this.size.get() - 1;
@@ -2138,6 +2227,12 @@ class Vector<T>
 		}
 	}
 	
+	/*
+	 * Algorithm 12: Compare and Set push back operation that compares
+	 * the value at the tail of the Vector's internal storage, and if
+	 * valid, the size of the Vector is incremented and the given Node
+	 * value is pushed onto the Vector's memory.
+	 */
 	int CAS_pushBack(Node<T> value)
 	{
 		int pos = this.size.get();
@@ -2181,7 +2276,11 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 13: 
+	 * Algorithm 13: Fetch-and-Add pop back operation that pops
+	 * the Node element value in the Vector's internal storage at
+	 * the tail of the array of elements. This is done by fetching
+	 * the position and popping the Node value at the position then
+	 * decrementing the overall size of the Vector.
 	 */
 	Return_Elem<T> FAA_popBack()
 	{
@@ -2211,7 +2310,11 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 14: 
+	 * Algorithm 14: Fetch-and-Add push back operation that pushes
+	 * the given Node element value into the Vector's internal storage
+	 * at the tail of the array of elements. This is done by fetching
+	 * the position and pushing the Node value at the position then
+	 * incrementing the overall size of the Vector.
 	 */
 	int FAA_pushBack(Node<T> value)
 	{
@@ -2274,7 +2377,10 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 16: 
+	 * Algorithm 16: A conditional write function that inserts a new
+	 * Node element into the internal storage of the Vector, if the
+	 * current Node element at the position is equal to the old Node
+	 * element given in the function.
 	 */
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> cwrite(int pos, Object old_Elem, Object new_Elem)
@@ -2341,7 +2447,10 @@ class Vector<T>
 	}
 	
 	/*
-	 * Algorithm 17: 
+	 * Algorithm 17: An insert function that inserts a given Node element
+	 * value at the given position. The elements must be shifted from the
+	 * position to the tail of the Vector's internal storage or array of
+	 * elements.
 	 */
 	boolean insertAt(int pos, Node<T> value)
 	{
@@ -2771,7 +2880,7 @@ public class Project_Assignment2
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 10;
+	public static int max_operations = 100;
 	
 	// Contains the ratios for tail operations, random access operations, and multi-position operations during multithreading.
 	public static double TO_Ratio = 0.05;

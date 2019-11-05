@@ -2671,7 +2671,7 @@ class VectorThread<T> extends Thread
 		
 		// Get a number of either 0 or 1 from the random number generator.
 		int random = rand.nextInt(2);
-					
+		
 		/*
 		 * If the number is 0, use a wait-free pop back operation on the vector if
 		 * the number of pop back operations is less than or equal to its ratio. If
@@ -2880,11 +2880,11 @@ public class Project_Assignment2
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);
 	
 	// Contains the maximum number operations used for each thread when accessing the stack.
-	public static int max_operations = 100;
+	public static int max_operations = 1250;
 	
 	// Contains the ratios for tail operations, random access operations, and multi-position operations during multithreading.
-	public static double TO_Ratio = 0.05;
-	public static double RA_Ratio = 0.95;
+	public static double TO_Ratio = 0;
+	public static double RA_Ratio = 1;
 	public static double MP_Ratio = 0;
 	
 	// Contains the number of Nodes to insert into the stack before being accessed by multiple threads.
@@ -2907,7 +2907,7 @@ public class Project_Assignment2
 		 * operations.
 		 */
 		System.out.println("Segmented Memory Model - ");
-		System.out.println("# Operations:\tExecution time:");
+		System.out.println("# Operations:\tExecution time (sec):");
 		
 		for(int i = 1; i <= max_threads; i++)
 		{
@@ -2964,7 +2964,7 @@ public class Project_Assignment2
 			 * Print the number of operations used and the execution time 
 			 * during multithreading.
 			 */
-			System.out.println(i + "\t\t" + execution_time + " sec");
+			System.out.println(i + "\t\t" + execution_time);
 			
 			// Clear out all the threads' list of Nodes to use new Nodes for the next iteration.
 			for(int j = 0; j < i; j++)
@@ -2982,7 +2982,7 @@ public class Project_Assignment2
 		
 		System.out.println("");
 		System.out.println("Contiguous Memory Model - ");
-		System.out.println("# Operations:\tExecution time:");
+		System.out.println("# Operations:\tExecution time (sec):");
 		
 		for(int i = 1; i <= max_threads; i++)
 		{
@@ -3039,7 +3039,7 @@ public class Project_Assignment2
 			 * Print the number of operations used and the execution time 
 			 * during multithreading.
 			 */
-			System.out.println(i + "\t\t" + execution_time + " sec");
+			System.out.println(i + "\t\t" + execution_time);
 			
 			// Clear out all the threads' list of Nodes to use new Nodes for the next iteration.
 			for(int j = 0; j < i; j++)

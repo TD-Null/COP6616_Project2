@@ -125,7 +125,7 @@ class PopDescr<T>
 					
 					else
 					{
-						PopSubDescr<T> psh = new PopSubDescr<T>(this, expected);
+						Descriptor<T> psh = new Descriptor<T>(new PopSubDescr<T>(this, expected));
 						
 						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, psh))
 						{
@@ -161,7 +161,7 @@ class PopDescr<T>
 					
 					else
 					{
-						PopSubDescr<T> psh = new PopSubDescr<T>(this, expected);
+						Descriptor<T> psh = new Descriptor<T>(new PopSubDescr<T>(this, expected));
 						
 						if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, psh, false, false))
 						{
@@ -266,14 +266,14 @@ class PushDescr<T>
 	int pos;
 	AtomicReference<State> state = new AtomicReference<State>();
 	
-	PushDescr(Vector<T> vec, Node<T> value, int pos)
+	PushDescr(Vector<T> vec, int pos, Node<T> value)
 	{
 		this.vec = vec;
 		this.value = value;
 		this.pos = pos;
 		this.state.set(State.UNDECIDED);
 	}
-	
+
 	/*
 	 * Algorithm 10: The push Descriptor object completes the push back operation
 	 * by check if the tail of the vector and the end of the vector's elements are
@@ -282,6 +282,7 @@ class PushDescr<T>
 	@SuppressWarnings("unchecked")
 	boolean complete()
 	{
+		//System.out.println("Completing push");
 		int failures = 0;
 		Object current;
 		
@@ -291,7 +292,7 @@ class PushDescr<T>
 			SegSpot spot2 = this.vec.segStorage.get().getSpot(this.pos - 1);
 			current = this.vec.segStorage.get().segments.get(spot2.segIdx).get(spot2.itemIdx);
 			
-			while(!(this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
+			while(!(!this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
 			{
 				if(failures++ >= this.vec.limit)
 				{
@@ -332,7 +333,7 @@ class PushDescr<T>
 			int spot2 = this.vec.conStorage.get().getSpot(this.pos - 1);
 			current = this.vec.conStorage.get().array.get(spot2).getReference();
 			
-			while(!(this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
+			while(!(!this.state.get().equals(State.UNDECIDED)) && (current instanceof Descriptor))
 			{
 				if(failures++ >= this.vec.limit)
 				{
@@ -471,66 +472,66 @@ class Descriptor<T>
 	ShiftDescr<T> shift;
 	
 	// Constructor for a Pop Descriptor.
-	Descriptor(Vector<T> vec, int pos)
+	Descriptor(PopDescr<T> pop)
 	{
 		type = Descr.POP;
-		pop = new PopDescr<T>(vec, pos);
+		this.pop = pop;
 	}
 	
 	// Constructor for a Pop-sub Descriptor.
-	Descriptor(PopDescr<T> parent, Node<T> value)
+	Descriptor(PopSubDescr<T> popSub)
 	{
 		type = Descr.POPSUB;
-		popSub = new PopSubDescr<T>(parent, value);
+		this.popSub = popSub;
 	}
 	
 	// Constructor for a Push Descriptor.
-	Descriptor(Vector<T> vec, int pos, Node<T> value)
+	Descriptor(PushDescr<T> push)
 	{
 		type = Descr.PUSH;
-		push = new PushDescr<T>(vec, value, pos);
+		this.push = push;
 	}
 	
 	// Constructor for a WriteHelper Descriptor.
-	Descriptor(WriteOp<T> parent, Node<T> value)
+	Descriptor(WriteHelper<T> write)
 	{
 		type = Descr.WRITE;
-		write = new WriteHelper<T>(parent, value);
+		this.write = write;
 	}
 	
 	// Constructor for a Shift Descriptor.
-	Descriptor(ShiftOp<T> op, ShiftDescr<T> prev, Node<T> value, int pos)
+	Descriptor(ShiftDescr<T> shift)
 	{
 		type = Descr.SHIFT;
-		shift = new ShiftDescr<T>(op, prev, value, pos);
+		this.shift = shift;
 	}
-	
+
 	// Function that completes the Descriptor Object's operation.
 	boolean complete()
 	{
 		if(type == Descr.POP)
 		{
-			return pop.complete();
+			return this.pop.complete();
 		}
 		
 		else if(type == Descr.POPSUB)
 		{
-			return popSub.complete();
+			return this.popSub.complete();
 		}
 		
 		else if(type == Descr.PUSH)
 		{
-			return push.complete();
+			return this.push.complete();
 		}
 		
 		else if(type == Descr.WRITE)
 		{
-			return write.complete();
+			return this.write.complete();
 		}
 		
 		else if(type == Descr.SHIFT)
 		{
-			return shift.complete();
+			return this.shift.complete();
 		}
 		
 		return false;
@@ -541,341 +542,30 @@ class Descriptor<T>
 	{
 		if(type == Descr.POP)
 		{
-			return pop.vec.NotValue_Elem;
+			return this.pop.vec.NotValue_Elem;
 		}
 		
 		else if(type == Descr.POPSUB)
 		{
-			return popSub.value;
+			return this.popSub.value;
 		}
 		
 		else if(type == Descr.PUSH)
 		{
-			return push.value;
+			return this.push.value;
 		}
 		
 		else if(type == Descr.WRITE)
 		{
-			return write.value;
+			return this.write.value;
 		}
 		
 		else if(type == Descr.SHIFT)
 		{
-			return shift.value;
+			return this.shift.value;
 		}
 		
 		return null;
-	}
-}
-
-// A wait-free pop back operation announcement.
-class WFPopOp<T>
-{
-	Vector<T> vec;
-	
-	WFPopOp(Vector<T> vec)
-	{
-		this.vec = vec;
-	}
-	
-	@SuppressWarnings("unchecked")
-	Return_Elem<T> helpComplete()
-	{
-		int pos = this.vec.size.get();
-		
-		if(pos == 0)
-		{
-			return new Return_Elem<T>(false, null);
-		}
-		
-		if(!this.vec.segmented_contiguous)
-		{
-			SegSpot spot = this.vec.getSegSpot(pos);
-			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-			
-			if(expected.equals(this.vec.NotValue_Elem))
-			{
-				Descriptor<T> ph = new Descriptor<T>(this.vec, pos);
-				
-				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
-				{
-					boolean res = ph.complete();
-					
-					if(res)
-					{
-						Object value = ph.pop.child.get();
-						this.vec.size.getAndDecrement();
-						return new Return_Elem<T>(true, value);
-					}
-					
-					else
-					{
-						pos--;
-					}
-				}
-			}
-			
-			else if(expected instanceof Descriptor)
-			{
-				((Descriptor<T>) expected).complete();
-			}
-		}
-		
-		else
-		{
-			int spot = this.vec.getConSpot(pos);
-			Object expected = this.vec.conStorage.get().array.get(spot);
-			
-			if(expected.equals(this.vec.NotValue_Elem))
-			{
-				Descriptor<T> ph = new Descriptor<T>(this.vec, pos);
-				
-				if(this.vec.conStorage.get().array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
-				{
-					boolean res = ph.complete();
-					
-					if(res)
-					{
-						Object value = ((PopSubDescr<T>) ph.pop.child.get()).value;
-						this.vec.size.getAndDecrement();
-						return new Return_Elem<T>(true, value);
-					}
-					
-					else
-					{
-						pos--;
-					}
-				}
-			}
-			
-			else if(expected instanceof Descriptor)
-			{
-				((Descriptor<T>) expected).complete();
-			}
-		}
-		
-		return new Return_Elem<T>(false, null);
-	}
-}
-
-// A wait-free push back operation announcement.
-class WFPushOp<T>
-{
-	Vector<T> vec;
-	Node<T> value;
-	
-	WFPushOp(Vector<T> vec, Node<T> value)
-	{
-		this.vec = vec;
-		this.value = value;
-	}
-	
-	@SuppressWarnings("unchecked")
-	int helpComplete()
-	{
-		int pos = this.vec.size.get();
-		
-		if(!this.vec.segmented_contiguous)
-		{
-			SegSpot spot = this.vec.getSegSpot(pos);
-			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-			
-			if(expected.equals(this.vec.NotValue_Elem))
-			{
-				if(pos == 0)
-				{
-					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
-					{
-						this.vec.size.getAndIncrement();
-						return 0;
-					}
-					
-					else
-					{
-						pos++;
-						spot = this.vec.getSegSpot(pos);
-					}
-				}
-			
-				Descriptor<T> ph = new Descriptor<T>(this.vec, pos, value);
-				
-				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
-				{
-					boolean res = ph.push.complete();
-					
-					if(res)
-					{
-						this.vec.size.getAndIncrement();
-						return pos - 1;
-					}
-					
-					else
-					{
-						pos--;
-					}
-				}
-				
-				else if(expected instanceof Descriptor)
-				{
-					((Descriptor<T>) expected).complete();
-				}
-			}
-			
-			else if(expected instanceof Descriptor)
-			{
-				((Descriptor<T>) expected).complete();
-			}
-		}
-		
-		else
-		{
-			int spot = this.vec.getConSpot(pos);
-			Object expected = this.vec.conStorage.get().array.get(spot);
-			
-			if(expected.equals(this.vec.NotValue_Elem))
-			{
-				if(pos == 0)
-				{
-					if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
-					{
-						this.vec.size.getAndIncrement();
-						return 0;
-					}
-					
-					else
-					{
-						pos++;
-						spot = this.vec.getConSpot(pos);
-					}
-				}
-			
-				Descriptor<T> ph = new Descriptor<T>(this.vec, pos, value);
-				
-				if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
-				{
-					boolean res = ph.push.complete();
-					
-					if(res)
-					{
-						this.vec.size.getAndIncrement();
-						return pos - 1;
-					}
-					
-					else
-					{
-						pos--;
-					}
-				}
-				
-				else if(expected instanceof Descriptor)
-				{
-					((Descriptor<T>) expected).complete();
-				}
-			}
-			
-			else if(expected instanceof Descriptor)
-			{
-				((Descriptor<T>) expected).complete();
-			}
-		}
-		
-		return 0;
-	}
-}
-
-// A compare and set pop back operation announcement.
-class CASPopOp<T>
-{
-	Vector<T> vec;
-	
-	CASPopOp(Vector<T> vec)
-	{
-		this.vec = vec;
-	}
-	
-	Return_Elem<T> helpComplete()
-	{
-		int pos = this.vec.size.get() - 1;
-		
-		if(pos < 0)
-		{
-			return new Return_Elem<T>(false, null);
-		}
-		
-		else
-		{
-			if(!this.vec.segmented_contiguous)
-			{
-				SegSpot spot = this.vec.getSegSpot(pos);
-				Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-				
-				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
-				{
-					this.vec.size.getAndDecrement();
-					Object value = cur;
-					return new Return_Elem<T>(true, value);
-				}
-			}
-			
-			else
-			{
-				int spot = this.vec.getConSpot(pos);
-				Object cur = this.vec.conStorage.get().array.get(spot);
-				
-				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
-				{
-					this.vec.size.getAndDecrement();
-					Object value = cur;
-					return new Return_Elem<T>(true, value);
-				}
-			}
-		}
-		
-		return new Return_Elem<T>(false, null);
-	}
-}
-
-// A compare and set push back operation announcement.
-class CASPushOp<T>
-{
-	Vector<T> vec;
-	Node<T> value;
-	
-	CASPushOp(Vector<T> vec, Node<T> value)
-	{
-		this.vec = vec;
-		this.value = value;
-	}
-	
-	int helpComplete()
-	{
-		int pos = this.vec.size.get();
-			
-		if(!this.vec.segmented_contiguous)
-		{
-			SegSpot spot = this.vec.getSegSpot(pos);
-			Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-			
-			if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
-			{
-				this.vec.size.getAndIncrement();
-				return pos;
-			}
-		}
-		
-		else
-		{
-			int spot = this.vec.getConSpot(pos);
-			Object cur = this.vec.conStorage.get().array.get(spot);
-			
-			if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
-			{
-				this.vec.size.getAndIncrement();
-				return pos;
-			}
-		}
-		
-		return 0;
 	}
 }
 
@@ -1109,7 +799,7 @@ class ShiftOp<T>
 				
 				else
 				{
-					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
+					Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, null, (Node<T>) cvalue, i));
 					
 					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 					{
@@ -1140,7 +830,7 @@ class ShiftOp<T>
 				
 				else
 				{
-					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
+					Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, null, (Node<T>) cvalue, i));
 					
 					if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 					{
@@ -1205,7 +895,7 @@ class ShiftOp<T>
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i));
 						
 						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 						{
@@ -1241,7 +931,7 @@ class ShiftOp<T>
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i));
 						
 						if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 						{
@@ -1258,7 +948,7 @@ class ShiftOp<T>
 			
 			ShiftDescr<T> newShift = ((Descriptor<T>) last).shift.next.get();
 
-			last = new Descriptor<T>(newShift.op, newShift.prev, newShift.value, newShift.pos);
+			last = new Descriptor<T>(newShift);
 		}
 	}
 	
@@ -1297,7 +987,7 @@ class ShiftOp<T>
 				
 				else
 				{
-					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
+					Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, null, (Node<T>) cvalue, i));
 					
 					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 					{
@@ -1328,7 +1018,7 @@ class ShiftOp<T>
 				
 				else
 				{
-					Descriptor<T> sh = new Descriptor<T>(this, null, (Node<T>) cvalue, i);
+					Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, null, (Node<T>) cvalue, i));
 					
 					if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 					{
@@ -1385,7 +1075,7 @@ class ShiftOp<T>
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i));
 						
 						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cvalue, sh))
 						{
@@ -1421,7 +1111,7 @@ class ShiftOp<T>
 					
 					else
 					{
-						Descriptor<T> sh = new Descriptor<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i);
+						Descriptor<T> sh = new Descriptor<T>(new ShiftDescr<T>(this, ((Descriptor<T>) last).shift, (Node<T>) cvalue, i));
 						
 						if(this.vec.conStorage.get().array.get(spot).compareAndSet(cvalue, sh, false, false))
 						{
@@ -1438,7 +1128,7 @@ class ShiftOp<T>
 			
 			ShiftDescr<T> newShift = ((Descriptor<T>) last).shift.next.get();
 
-			last = new Descriptor<T>(newShift.op, newShift.prev, newShift.value, newShift.pos);
+			last = new Descriptor<T>(newShift);
 		}
 	}
 	
@@ -1860,35 +1550,7 @@ class Vector<T>
 			
 			if(operation != null)
 			{
-				if(operation instanceof WFPopOp)
-				{
-					((WFPopOp<T>) operation).helpComplete();
-				}
 				
-				else if(operation instanceof WFPushOp)
-				{
-					((WFPushOp<T>) operation).helpComplete();
-				}
-				
-				else if(operation instanceof CASPopOp)
-				{
-					((CASPopOp<T>) operation).helpComplete();
-				}
-				
-				else if(operation instanceof CASPushOp)
-				{
-					((CASPushOp<T>) operation).helpComplete();
-				}
-				
-				else if(operation instanceof WriteOp)
-				{
-					((WriteOp<T>) operation).helpComplete();
-				}
-				
-				else if(operation instanceof ShiftOp)
-				{
-					((ShiftOp<T>) operation).helpComplete();
-				}
 			}
 			
 			else
@@ -1901,30 +1563,26 @@ class Vector<T>
 	}
 	
 	// Make an announcement for a wait-free pop back operation.
-	Return_Elem<T> announceWFPopOp(WFPopOp<T> operation)
+	Return_Elem<T> announceWFPopOp()
 	{
-		announcementTable.get().add(operation);
 		return new Return_Elem<T>(false, null);
 	}
 	
 	// Make an announcement for a wait-free push back operation.
-	int announceWFPushOp(WFPushOp<T> operation)
+	int announceWFPushOp()
 	{
-		announcementTable.get().add(operation);
 		return 0;
 	}
 	
 	// Make an announcement for a compare and set pop back operation.
-	Return_Elem<T> announceCASPopOp(CASPopOp<T> operation)
+	Return_Elem<T> announceCASPopOp()
 	{
-		announcementTable.get().add(operation);
 		return new Return_Elem<T>(false, null);
 	}
 	
 	// Make an announcement for a compare and set push back operation.
-	int announceCASPushOp(CASPushOp<T> operation)
+	int announceCASPushOp()
 	{
-		announcementTable.get().add(operation);
 		return 0;
 	}
 	
@@ -1966,7 +1624,7 @@ class Vector<T>
 				
 				if(expected.equals(NotValue_Elem))
 				{
-					Descriptor<T> ph = new Descriptor<T>(this, pos);
+					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this, pos));
 					
 					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, NotValue_Elem, ph))
 					{
@@ -2004,7 +1662,7 @@ class Vector<T>
 				
 				if(expected.equals(NotValue_Elem))
 				{
-					Descriptor<T> ph = new Descriptor<T>(this, pos);
+					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this, pos));
 					
 					if(conStorage.get().array.get(spot).compareAndSet(NotValue_Elem, ph, false, false))
 					{
@@ -2036,7 +1694,7 @@ class Vector<T>
 			}
 		}
 		
-		return announceWFPopOp(new WFPopOp<T>(this));
+		return announceWFPopOp();
 	}
 	
 	/*
@@ -2073,11 +1731,11 @@ class Vector<T>
 						}
 					}
 				
-					Descriptor<T> ph = new Descriptor<T>(this, pos, value);
+					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this, pos, value));
 					
 					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
 					{
-						boolean res = ph.push.complete();
+						boolean res = ph.complete();
 						
 						if(res)
 						{
@@ -2089,11 +1747,6 @@ class Vector<T>
 						{
 							pos--;
 						}
-					}
-					
-					else if(expected instanceof Descriptor)
-					{
-						((Descriptor<T>) expected).complete();
 					}
 				}
 				
@@ -2130,11 +1783,11 @@ class Vector<T>
 						}
 					}
 				
-					Descriptor<T> ph = new Descriptor<T>(this, pos, value);
+					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this, pos, value));
 					
 					if(conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
 					{
-						boolean res = ph.push.complete();
+						boolean res = ph.complete();
 						
 						if(res)
 						{
@@ -2146,11 +1799,6 @@ class Vector<T>
 						{
 							pos--;
 						}
-					}
-					
-					else if(expected instanceof Descriptor)
-					{
-						((Descriptor<T>) expected).complete();
 					}
 				}
 				
@@ -2166,7 +1814,7 @@ class Vector<T>
 			}
 		}
 		
-		return announceWFPushOp(new WFPushOp<T>(this, value));
+		return announceWFPushOp();
 	}
 	
 	/*
@@ -2184,7 +1832,7 @@ class Vector<T>
 		{
 			if(failures++ > limit)
 			{
-				return announceCASPopOp(new CASPopOp<T>(this));
+				return announceCASPopOp();
 			}
 			
 			else if(pos < 0)
@@ -2242,7 +1890,7 @@ class Vector<T>
 		{
 			if(failures++ > limit)
 			{
-				return announceCASPushOp(new CASPushOp<T>(this, value));
+				return announceCASPushOp();
 			}
 			
 			if(!segmented_contiguous)
@@ -2907,7 +2555,7 @@ public class Project_Assignment2
 		 * operations.
 		 */
 		System.out.println("Segmented Memory Model - ");
-		System.out.println("# Operations:\tExecution time (sec):");
+		System.out.println("# Threads:\tExecution time (sec):");
 		
 		for(int i = 1; i <= max_threads; i++)
 		{
@@ -2961,7 +2609,7 @@ public class Project_Assignment2
 			float execution_time = (float) duration / 1000000000;
 						
 			/*
-			 * Print the number of operations used and the execution time 
+			 * Print the number of threads used and the execution time 
 			 * during multithreading.
 			 */
 			System.out.println(i + "\t\t" + execution_time);

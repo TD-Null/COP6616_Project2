@@ -70,11 +70,17 @@ enum Descr
 }
 
 /*
- * A Descriptor object for the pop back operation that removes an element
+ * A Descriptor object for the pop_back operation that removes an element
  * at the tail of the vector's elements.
  */
 class PopDescr<T>
 {
+	/*
+	 * The pop Descriptor object contains fields of a reference to the
+	 * vector it is contained within, the position of where the pop_back
+	 * operation occurs, and an atomic reference to its child Descriptor
+	 * object, pop-sub.
+	 */
 	Vector<T> vec;
 	int pos;
 	AtomicReference<Object> child = new AtomicReference<Object>();
@@ -93,10 +99,17 @@ class PopDescr<T>
 	 * If not, then it replaces the Descriptor object with its original value.
 	 */
 	@SuppressWarnings("unchecked")
-	boolean complete()
+	boolean complete(int threadID)
 	{
 		int failures = 0;
 		
+		/*
+		 * Attempts to insert the child Descriptor object on the end of the
+		 * vector, given its position, if the expected value remains the same
+		 * when inserting Descriptor object. If a escriptor object is seen at
+		 * the checked position, then help complete the operation within the
+		 * Descriptor object.
+		 */
 		while(this.child.get() == null)
 		{
 			if(failures++ >= this.vec.limit)
@@ -120,7 +133,7 @@ class PopDescr<T>
 					
 					else if(expected instanceof Descriptor)
 					{
-						((Descriptor<T>) expected).complete();
+						((Descriptor<T>) expected).complete(threadID);
 					}
 					
 					else
@@ -156,7 +169,7 @@ class PopDescr<T>
 					
 					else if(expected instanceof Descriptor)
 					{
-						((Descriptor<T>) expected).complete();
+						((Descriptor<T>) expected).complete(threadID);
 					}
 					
 					else
@@ -182,6 +195,10 @@ class PopDescr<T>
 			}	
 		}
 		
+		/*
+		 * If the Descriptor object is still within its current position of the 
+		 * vector, then replace the Descriptor object with a NotValue.
+		 */
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.getSegSpot(this.pos);
@@ -194,6 +211,7 @@ class PopDescr<T>
 			this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
 		}
 		
+		// The operation is successful if the child doesn't equal a FAILED state
 		return (!this.child.get().equals(State.FAILED));
 	}
 }
@@ -204,6 +222,12 @@ class PopDescr<T>
  */
 class PopSubDescr<T>
 {
+	/*
+	 * The pop-sub Descriptor object contains fields of a reference to
+	 * its parent Descriptor object, pop, and the original value that was
+	 * currently within the same position of the pop-sub Descriptor object 
+	 * of the vector.
+	 */
 	PopDescr<T> parent;
 	Object value;
 	
@@ -215,12 +239,17 @@ class PopSubDescr<T>
 	
 	/*
 	 * Algorithm 8: The pop-sub Descriptor object helps complete the pop back
-	 * operation by check if it is still associated with its parent Descriptor
+	 * operation by checking if it is still associated with its parent Descriptor
 	 * object. If so, then the element is popped from the tail of the vector.
 	 * If not, then it replaces the Descriptor object with its original value.
 	 */
 	boolean complete()
 	{
+		/*
+		 * Checks if its parent Descriptor object is associated with this 
+		 * Descriptor object and if the position of the element that needs 
+		 * to be popped remains the same as its original value.
+		 */
 		if(!this.parent.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.parent.vec.getSegSpot(this.parent.pos - 1);
@@ -251,16 +280,26 @@ class PopSubDescr<T>
 			}
 		}
 		
+		/*
+		 * The operation is successful if the parent Descriptor object is 
+		 * still associated to its child Descriptor object.
+		 */
 		return (this.parent.child.get().equals(this));
 	}
 }
 
 /*
- * A Descriptor object for the push back operation that inserts an element
+ * A Descriptor object for the push_back operation that inserts an element
  * at the tail of the vector's elements.
  */
 class PushDescr<T>
 {
+	/*
+	 * The pop Descriptor object contains fields of a reference to the
+	 * vector it is contained within, the original value replaced by the
+	 * Descriptor object, the position of where the push_back operation 
+	 * occurs, and an atomic reference to its current state.
+	 */
 	Vector<T> vec;
 	Node<T> value;
 	int pos;
@@ -275,17 +314,24 @@ class PushDescr<T>
 	}
 
 	/*
-	 * Algorithm 10: The push Descriptor object completes the push back operation
-	 * by check if the tail of the vector and the end of the vector's elements are
-	 * valid for pushing an element to the tail of the vector.
+	 * Algorithm 10: The push Descriptor object completes the push_back operation
+	 * by checking if the tail of the vector and the end of the vector's elements 
+	 * are valid for pushing an element to the tail of the vector, where the tail
+	 * should have a NotValue, and the end should have a valid element.
 	 */
 	@SuppressWarnings("unchecked")
-	boolean complete()
+	boolean complete(int threadID)
 	{
-		//System.out.println("Completing push");
 		int failures = 0;
 		Object current;
 		
+		/*
+		 * Ensure that the push Descriptor object was placed at the tail position of
+		 * the vector. If is contains a NotValue at the position, then the push Descriptor
+		 * object was placed inccorrectly, so its state is FAILED and must be tried again.
+		 * Else, the state is set to PASSED, and the Descriptor object is replace with the
+		 * value that is being pushed at the tail position of the vector..
+		 */
 		if(!this.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.vec.segStorage.get().getSpot(this.pos);
@@ -299,7 +345,7 @@ class PushDescr<T>
 					this.state.compareAndSet(State.UNDECIDED, State.FAILED);
 				}
 				
-				((Descriptor<T>) current).complete();
+				((Descriptor<T>) current).complete(threadID);
 				current = this.vec.segStorage.get().segments.get(spot2.segIdx).get(spot2.itemIdx);
 			}
 			
@@ -340,7 +386,7 @@ class PushDescr<T>
 					this.state.compareAndSet(State.UNDECIDED, State.FAILED);
 				}
 				
-				((Descriptor<T>) current).complete();
+				((Descriptor<T>) current).complete(threadID);
 				current = this.vec.conStorage.get().array.get(spot2).getReference();
 			}
 			
@@ -368,7 +414,79 @@ class PushDescr<T>
 			}
 		}
 		
+		// The operation is successful if the push Descriptor object's state is PASSED.
 		return (this.state.get().equals(State.PASSED));
+	}
+}
+
+/*
+ * A Descriptor object used for a conditional write operation announcement
+ * to help complete the operation.
+ */
+class WriteHelper<T>
+{
+	/*
+	 * The write helper Descriptor object contains fields of a reference to its
+	 * parent write operation record, and the original value replace by this
+	 * Descriptoor object.
+	 */
+	WriteOp<T> parent;
+	Node<T> value;
+	
+	WriteHelper(WriteOp<T> parent, Node<T> value)
+	{
+		this.parent = parent;
+		this.value = value;
+	}
+	
+	/*
+	 * Complete the conditional write operation by replacing the Descriptor object 
+	 * with the inserted value of the parent's new element.
+	 */
+	boolean complete()
+	{
+		/*
+		 * Check if the parent write operation is still associated with this child
+		 * Descriptor object, and the original value contained with this Descriptor
+		 * object is the same as the parent's old element. If so, replace the Descriptor
+		 * object with the new element. If not, the replace the Descriptor object with
+		 * the value ctonains with this Descriptor object.
+		 */
+		if(!this.parent.vec.segmented_contiguous)
+		{
+			SegSpot spot = this.parent.vec.getSegSpot(this.parent.pos);
+			
+			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
+			{
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.new_Elem);
+			}
+			
+			else
+			{
+				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
+			}
+		}
+		
+		else
+		{
+			int spot = this.parent.vec.getConSpot(this.parent.pos);
+			
+			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
+			{
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.parent.new_Elem, false, false);
+			}
+			
+			else
+			{
+				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
+			}
+		}
+		
+		/*
+		 * The operation is successful if the parent write operation is 
+		 * associated with this Descriptor object.
+		 */
+		return (this.parent.child.get().equals(this));
 	}
 }
 
@@ -379,6 +497,13 @@ class PushDescr<T>
  */
 class ShiftDescr<T>
 {
+	/*
+	 * The shift Descriptor object contains fields of a reference to its shift
+	 * operation, the position it is currently within the vector, the original
+	 * value that was replaced by the Descriptor object, a reference to its
+	 * previous Descriptor object within the vector, and an atomic reference 
+	 * to its next Descriptor object within the vector.
+	 */
 	ShiftOp<T> op;
 	int pos;
 	Node<T> value;
@@ -400,10 +525,15 @@ class ShiftDescr<T>
 	 * shift operation. If not, then it replaces the Descriptor object with
 	 * its original value.
 	 */
-	boolean complete()
+	boolean complete(int threadID)
 	{
 		boolean isAssoc = false;
 		
+		/*
+		 * Check the previous and next Descriptor objects and check 
+		 * if they are associated with the same shift operation as 
+		 * the current shift Descriptor object.
+		 */
 		if(this.prev == null)
 		{
 			this.op.next.compareAndSet(null, this);
@@ -416,13 +546,20 @@ class ShiftDescr<T>
 			isAssoc = this.prev.next.get() == this;
 		}
 		
+		/*
+		 * If the shift Descriptor object is associated with the shift operation
+		 * of its previous and next Descriptor objects, then help complete the
+		 * shift operation and replace the shift Descriptor object with its shifted
+		 * valued using the valueGetter() function. Else, replace the Descriptor
+		 * with its original value.
+		 */
 		if(!this.op.vec.segmented_contiguous)
 		{
 			SegSpot spot = this.op.vec.getSegSpot(this.pos);
 			
 			if(isAssoc)
 			{
-				this.op.complete();
+				this.op.complete(threadID);
 				this.op.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.op.valueGetter(this));
 			}
 			
@@ -438,7 +575,7 @@ class ShiftDescr<T>
 			
 			if(isAssoc)
 			{
-				this.op.complete();
+				this.op.complete(threadID);
 				this.op.vec.conStorage.get().array.get(spot).compareAndSet(this, this.op.valueGetter(this), false, false);
 			}
 			
@@ -507,11 +644,11 @@ class Descriptor<T>
 	}
 
 	// Function that completes the Descriptor Object's operation.
-	boolean complete()
+	boolean complete(int threadID)
 	{
 		if(type == Descr.POP)
 		{
-			return this.pop.complete();
+			return this.pop.complete(threadID);
 		}
 		
 		else if(type == Descr.POPSUB)
@@ -521,7 +658,7 @@ class Descriptor<T>
 		
 		else if(type == Descr.PUSH)
 		{
-			return this.push.complete();
+			return this.push.complete(threadID);
 		}
 		
 		else if(type == Descr.WRITE)
@@ -531,7 +668,7 @@ class Descriptor<T>
 		
 		else if(type == Descr.SHIFT)
 		{
-			return this.shift.complete();
+			return this.shift.complete(threadID);
 		}
 		
 		return false;
@@ -569,9 +706,325 @@ class Descriptor<T>
 	}
 }
 
-// A conditional write operation announcement.
+//A wait-free pop back operation announcement.
+class WFPopOp<T>
+{
+	Vector<T> vec;
+	
+	WFPopOp(Vector<T> vec)
+	{
+		this.vec = vec;
+	}
+	
+	@SuppressWarnings("unchecked")
+	Return_Elem<T> helpComplete(int threadID)
+	{
+		while(true)
+		{
+			int pos = this.vec.size.get();
+			
+			if(pos == 0)
+			{
+				break;
+			}
+			
+			if(!this.vec.segmented_contiguous)
+			{
+				SegSpot spot = this.vec.getSegSpot(pos);
+				Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				
+				if(expected.equals(this.vec.NotValue_Elem))
+				{
+					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
+					
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
+					{
+						boolean res = ph.complete(threadID);
+						
+						if(res)
+						{
+							Object value = ph.pop.child.get();
+							this.vec.size.getAndDecrement();
+							return new Return_Elem<T>(true, value);
+						}
+						
+						else
+						{
+							pos--;
+						}
+					}
+				}
+				
+				else if(expected instanceof Descriptor)
+				{
+					((Descriptor<T>) expected).complete(threadID);
+				}
+			}
+			
+			else
+			{
+				int spot = this.vec.getConSpot(pos);
+				Object expected = this.vec.conStorage.get().array.get(spot);
+				
+				if(expected.equals(this.vec.NotValue_Elem))
+				{
+					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
+					
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
+					{
+						boolean res = ph.complete(threadID);
+						
+						if(res)
+						{
+							Object value = ((PopSubDescr<T>) ph.pop.child.get()).value;
+							this.vec.size.getAndDecrement();
+							return new Return_Elem<T>(true, value);
+						}
+						
+						else
+						{
+							pos--;
+						}
+					}
+				}
+				
+				else if(expected instanceof Descriptor)
+				{
+					((Descriptor<T>) expected).complete(threadID);
+				}
+			}
+		}
+		
+		return new Return_Elem<T>(false, null);
+	}
+}
+
+//A wait-free push back operation announcement.
+class WFPushOp<T>
+{
+	Vector<T> vec;
+	Node<T> value;
+	
+	WFPushOp(Vector<T> vec, Node<T> value)
+	{
+		this.vec = vec;
+		this.value = value;
+	}
+	
+	@SuppressWarnings("unchecked")
+	int helpComplete(int threadID)
+	{
+		while(true)
+		{
+			int pos = this.vec.size.get();
+			
+			if(!this.vec.segmented_contiguous)
+			{
+				SegSpot spot = this.vec.getSegSpot(pos);
+				Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				
+				if(expected.equals(this.vec.NotValue_Elem))
+				{
+					if(pos == 0)
+					{
+						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
+						{
+							this.vec.size.getAndIncrement();
+							return 0;
+						}
+						
+						else
+						{
+							pos++;
+							spot = this.vec.getSegSpot(pos);
+						}
+					}
+				
+					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
+					
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
+					{
+						boolean res = ph.push.complete(threadID);
+						
+						if(res)
+						{
+							this.vec.size.getAndIncrement();
+							return pos - 1;
+						}
+						
+						else
+						{
+							pos--;
+						}
+					}
+				}
+				
+				else if(expected instanceof Descriptor)
+				{
+					((Descriptor<T>) expected).complete(threadID);
+				}
+			}
+			
+			else
+			{
+				int spot = this.vec.getConSpot(pos);
+				Object expected = this.vec.conStorage.get().array.get(spot);
+				
+				if(expected.equals(this.vec.NotValue_Elem))
+				{
+					if(pos == 0)
+					{
+						if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
+						{
+							this.vec.size.getAndIncrement();
+							return 0;
+						}
+						
+						else
+						{
+							pos++;
+							spot = this.vec.getConSpot(pos);
+						}
+					}
+				
+					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
+					
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
+					{
+						boolean res = ph.push.complete(threadID);
+						
+						if(res)
+						{
+							this.vec.size.getAndIncrement();
+							return pos - 1;
+						}
+						
+						else
+						{
+							pos--;
+						}
+					}
+				}
+				
+				else if(expected instanceof Descriptor)
+				{
+					((Descriptor<T>) expected).complete(threadID);
+				}
+			}
+		}
+	}
+}
+
+// A compare and set pop_back operation record announcement.
+class CASPopOp<T>
+{
+	Vector<T> vec;
+	
+	CASPopOp(Vector<T> vec)
+	{
+		this.vec = vec;
+	}
+	
+	Return_Elem<T> helpComplete(int threadID)
+	{
+		while(true)
+		{
+			int pos = this.vec.size.get() - 1;
+			
+			if(pos < 0)
+			{
+				break;
+			}
+			
+			else
+			{
+				if(!this.vec.segmented_contiguous)
+				{
+					SegSpot spot = this.vec.getSegSpot(pos);
+					Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+					
+					if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
+					{
+						this.vec.size.getAndDecrement();
+						Object value = cur;
+						return new Return_Elem<T>(true, value);
+					}
+				}
+				
+				else
+				{
+					int spot = this.vec.getConSpot(pos);
+					Object cur = this.vec.conStorage.get().array.get(spot);
+					
+					if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
+					{
+						this.vec.size.getAndDecrement();
+						Object value = cur;
+						return new Return_Elem<T>(true, value);
+					}
+				}
+			}
+		}
+		
+		return new Return_Elem<T>(false, null);
+	}
+}
+
+//A compare and set push back operation announcement.
+class CASPushOp<T>
+{
+	Vector<T> vec;
+	Node<T> value;
+	
+	CASPushOp(Vector<T> vec, Node<T> value)
+	{
+		this.vec = vec;
+		this.value = value;
+	}
+	
+	int helpComplete(int threadID)
+	{
+		while(true)
+		{
+			int pos = this.vec.size.get();
+				
+			if(!this.vec.segmented_contiguous)
+			{
+				SegSpot spot = this.vec.getSegSpot(pos);
+				Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				
+				if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
+				{
+					this.vec.size.getAndIncrement();
+					return pos;
+				}
+			}
+			
+			else
+			{
+				int spot = this.vec.getConSpot(pos);
+				Object cur = this.vec.conStorage.get().array.get(spot);
+				
+				if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
+				{
+					this.vec.size.getAndIncrement();
+					return pos;
+				}
+			}
+		}
+	}
+}
+
+// A conditional write operation record announcement.
 class WriteOp<T>
 {
+	/*
+	 * The conditional write operation contains fields of a reference to
+	 * the vector, the position where old element will be replaced with
+	 * the new element, the values of the old and new elements at a given
+	 * position of the vector, and a reference to the write helper Descriptor
+	 * object as a child.
+	 */
 	Vector<T> vec;
 	int pos;
 	Object old_Elem;
@@ -588,74 +1041,89 @@ class WriteOp<T>
 	}
 	
 	@SuppressWarnings("unchecked")
-	Return_Elem<T> helpComplete()
+	Return_Elem<T> helpComplete(int threadID)
 	{
-		if(!this.vec.segmented_contiguous)
+		// Check first that the given position is within the capacity of the vector.
+		while(this.pos < this.vec.getCapacity())
 		{
-			SegSpot spot = this.vec.getSegSpot(this.pos);
-			Object value = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-			
-			if(value instanceof Descriptor)
+			/*
+			 * The conditional write operation will first attempt to insert the write helper
+			 * Descriptor object on the given position of the vector. If the write helper
+			 * Descriptor object is associated with the write operation and its value matches
+			 * the old element of the write operation, then the logical value is the new element
+			 * at the given position. Otherwise the logical value is its value member.
+			 */
+			if(!this.vec.segmented_contiguous)
 			{
-				((Descriptor<T>) value).complete();
-			}
-			
-			else
-			{
-				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
+				SegSpot spot = this.vec.getSegSpot(this.pos);
+				Object value = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				
-				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, write))
+				if(value instanceof Descriptor)
 				{
-					this.child.compareAndSet(null, write);
+					((Descriptor<T>) value).complete(threadID);
+				}
+				
+				else
+				{
+					WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
 					
-					if(this.child.get().equals(write))
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, write))
 					{
-						Node<T> currentValue = write.value;
+						this.child.compareAndSet(null, write);
 						
-						if(currentValue.equals(old_Elem))
+						if(this.child.get().equals(write))
 						{
-							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
-						}
-						
-						else
-						{
-							this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
+							Node<T> currentValue = write.value;
+							
+							if(currentValue.equals(old_Elem))
+							{
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
+								return new Return_Elem<T>(true, old_Elem);
+							}
+							
+							else
+							{
+								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
+								return new Return_Elem<T>(false, value);
+							}
 						}
 					}
 				}
 			}
-		}
-		
-		else
-		{
-			int spot = this.vec.getConSpot(this.pos);
-			Object value = this.vec.conStorage.get().array.get(spot).getReference();
-			
-			if(value instanceof Descriptor)
-			{
-				((Descriptor<T>) value).complete();
-			}
 			
 			else
 			{
-				WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
+				int spot = this.vec.getConSpot(this.pos);
+				Object value = this.vec.conStorage.get().array.get(spot).getReference();
 				
-				if(this.vec.conStorage.get().array.get(spot).compareAndSet(value, write, false, false))
+				if(value instanceof Descriptor)
 				{
-					this.child.compareAndSet(null, write);
+					((Descriptor<T>) value).complete(threadID);
+				}
+				
+				else
+				{
+					WriteHelper<T> write = new WriteHelper<T>(this, (Node<T>) value);
 					
-					if(this.child.get().equals(write))
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(value, write, false, false))
 					{
-						Node<T> currentValue = write.value;
+						this.child.compareAndSet(null, write);
 						
-						if(currentValue.equals(old_Elem))
+						if(this.child.get().equals(write))
 						{
-							this.vec.conStorage.get().array.get(spot).compareAndSet(write, new_Elem, false, false);
-						}
-						
-						else
-						{
-							this.vec.conStorage.get().array.get(spot).compareAndSet(write, currentValue, false, false);
+							Node<T> currentValue = write.value;
+							
+							if(currentValue.equals(old_Elem))
+							{
+								this.vec.conStorage.get().array.get(spot).compareAndSet(write, new_Elem, false, false);
+								return new Return_Elem<T>(true, old_Elem);
+							}
+							
+							else
+							{
+								this.vec.conStorage.get().array.get(spot).compareAndSet(write, currentValue, false, false);
+								return new Return_Elem<T>(false, value);
+							}
 						}
 					}
 				}
@@ -667,68 +1135,28 @@ class WriteOp<T>
 }
 
 /*
- * A Descriptor object used for a conditional write operation announcement
- * to help complete the operation.
- */
-class WriteHelper<T>
-{
-	WriteOp<T> parent;
-	Node<T> value;
-	
-	WriteHelper(WriteOp<T> parent, Node<T> value)
-	{
-		this.parent = parent;
-		this.value = value;
-	}
-	
-	boolean complete()
-	{
-		if(!this.parent.vec.segmented_contiguous)
-		{
-			SegSpot spot = this.parent.vec.getSegSpot(this.parent.pos);
-			
-			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
-			{
-				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.parent.new_Elem);
-			}
-			
-			else
-			{
-				this.parent.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this, this.value);
-			}
-		}
-		
-		else
-		{
-			int spot = this.parent.vec.getConSpot(this.parent.pos);
-			
-			if(this.parent.child.get().equals(this) && this.value.equals(this.parent.old_Elem))
-			{
-				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.parent.new_Elem, false, false);
-			}
-			
-			else
-			{
-				this.parent.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
-			}
-		}
-		
-		return (this.parent.child.get().equals(this));
-	}
-}
-
-/*
- * Shift operation that inserts Descriptor objects from the given position 
- * to the end of the vector to shift values based on where it was an insertAt() 
- * method or an eraseAt() method.
+ * Shift operation that inserts Descriptor objects from the given 
+ * position to the end of the vector to shift values based on whether 
+ * it was an insertAt() method or an eraseAt() method.
  */
 class ShiftOp<T>
 {
+	/*
+	 * The shift operation contains fields of a reference to the vector, 
+	 * the position where the value will be inserted or erased, a Boolean
+	 * value to signify whether or not the shift operation is completed,
+	 * and a reference to the next shift Descriptor object.
+	 */
 	Vector<T> vec;
 	int pos;
 	AtomicBoolean incomplete = new AtomicBoolean();
 	AtomicReference<Object> next = new AtomicReference<Object>();
 	
+	/*
+	 * Contains a Boolean value representing if the shift operation is from 
+	 * either an inserAt() or an eraseAt() function and a value used if the 
+	 * shift operation is from an insertAt().
+	 */
 	boolean shiftType;
 	Node<T> value;
 	
@@ -761,10 +1189,14 @@ class ShiftOp<T>
 	 * would find a NotValue.
 	 */
 	@SuppressWarnings("unchecked")
-	void complete()
+	void complete(int threadID)
 	{
 		int i = this.pos;
 		
+		/*
+		 * Check if the given position of the shift operation 
+		 * is within the capacity of the vector.
+		 */
 		if(i >= this.vec.getCapacity())
 		{
 			this.next.compareAndSet(null, State.FAILED);
@@ -772,11 +1204,20 @@ class ShiftOp<T>
 		
 		int failures = 0;
 		
+		/*
+		 * Attempt to insert the first shift Descriptor object at the given
+		 * position of the shift operation within a given limit.
+		 */
 		while(this.next.get() == null)
 		{
 			if(failures++ == this.vec.limit)
 			{
-				this.vec.announceShiftOp(this);
+				/*
+				 * If the thread has failed to execute the operation within
+				 * a given limit, announce the operation to other threads to
+				 * get help completing the operation.
+				 */
+				this.vec.announceOp(this, threadID);
 				return;
 			}
 			
@@ -789,7 +1230,7 @@ class ShiftOp<T>
 				
 				if(cvalue instanceof Descriptor)
 				{
-					((Descriptor<T>) cvalue).complete();
+					((Descriptor<T>) cvalue).complete(threadID);
 				}
 				
 				else if(cvalue.equals(this.vec.NotValue_Elem))
@@ -820,7 +1261,7 @@ class ShiftOp<T>
 				
 				if(cvalue instanceof Descriptor)
 				{
-					((Descriptor<T>) cvalue).complete();
+					((Descriptor<T>) cvalue).complete(threadID);
 				}
 				
 				else if(cvalue.equals(this.vec.NotValue_Elem))
@@ -852,6 +1293,13 @@ class ShiftOp<T>
 			return;
 		}
 		
+		/*
+		 * Attempt to insert the rest of the shift Descriptor objects 
+		 * from the given position added by 1 to the end of the vector.
+		 * Uses specialized logic to prevent deadlocks between other
+		 * Descriptor object with cyclic dependencies, which would be
+		 * either a push or pop Descriptor objects.
+		 */
 		while(this.incomplete.get())
 		{
 			i++;
@@ -867,7 +1315,12 @@ class ShiftOp<T>
 			{
 				if(failures++ == this.vec.limit)
 				{
-					this.vec.announceShiftOp(this);
+					/*
+					 * If the thread has failed to execute the operation within
+					 * a given limit, announce the operation to other threads to
+					 * get help completing the operation.
+					 */
+					this.vec.announceOp(this, threadID);
 					return;
 				}
 				
@@ -890,7 +1343,7 @@ class ShiftOp<T>
 							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
 						}
 						
-						((Descriptor<T>) cvalue).complete();
+						((Descriptor<T>) cvalue).complete(threadID);
 					}
 					
 					else
@@ -926,7 +1379,7 @@ class ShiftOp<T>
 							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
 						}
 						
-						((Descriptor<T>) cvalue).complete();
+						((Descriptor<T>) cvalue).complete(threadID);
 					}
 					
 					else
@@ -957,7 +1410,7 @@ class ShiftOp<T>
 	 * Similar to the complete() function without the failure counter.
 	 */
 	@SuppressWarnings("unchecked")
-	void helpComplete()
+	void helpComplete(int threadID)
 	{
 		int i = this.pos;
 		
@@ -977,7 +1430,7 @@ class ShiftOp<T>
 				
 				if(cvalue instanceof Descriptor)
 				{
-					((Descriptor<T>) cvalue).complete();
+					((Descriptor<T>) cvalue).complete(threadID);
 				}
 				
 				else if(cvalue.equals(this.vec.NotValue_Elem))
@@ -1008,7 +1461,7 @@ class ShiftOp<T>
 				
 				if(cvalue instanceof Descriptor)
 				{
-					((Descriptor<T>) cvalue).complete();
+					((Descriptor<T>) cvalue).complete(threadID);
 				}
 				
 				else if(cvalue.equals(this.vec.NotValue_Elem))
@@ -1070,7 +1523,7 @@ class ShiftOp<T>
 							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
 						}
 						
-						((Descriptor<T>) cvalue).complete();
+						((Descriptor<T>) cvalue).complete(threadID);
 					}
 					
 					else
@@ -1106,7 +1559,7 @@ class ShiftOp<T>
 							((Descriptor<T>) cvalue).pop.child.compareAndSet(null, State.FAILED);
 						}
 						
-						((Descriptor<T>) cvalue).complete();
+						((Descriptor<T>) cvalue).complete(threadID);
 					}
 					
 					else
@@ -1141,6 +1594,10 @@ class ShiftOp<T>
 	{
 		ShiftDescr<T> sh = (ShiftDescr<T>) this.next.get();
 		
+		/*
+		 * Traverse through the shift operation's Descriptor objects and 
+		 * replacing them with their logic values.
+		 */
 		for(int tpos = this.pos; sh != null; tpos++)
 		{
 			if(!this.vec.segmented_contiguous)
@@ -1189,6 +1646,112 @@ class ShiftOp<T>
 			else
 			{
 				return sh.next.get().value;
+			}
+		}
+	}
+}
+
+class OperationRecord<T>
+{
+	/*
+	 * Contains a state of the operation record. If the state is 1) NONE,
+	 * then there is current no operation recorded from a thread. If the
+	 * state is 2) HELP, then there is an operation announced by a thread
+	 * that
+	 */
+	public static final int NONE = 0, HELP = 1, COMPLETING = 2;
+	
+	// Contains the operation record and its current state.
+	AtomicStampedReference<Object> state;
+	
+	OperationRecord()
+	{
+		this.state = new AtomicStampedReference<Object>(null, 0);
+	}
+	
+	@SuppressWarnings("unchecked")
+	public void helpComplete(int threadID)
+	{
+		// First, get the current operation stored within the operation record.
+		Object currentOperation = state.getReference();
+		
+		if(this.state.compareAndSet(currentOperation, currentOperation, HELP, COMPLETING))
+		{
+			/*
+			 * Call the helpComplete() function of the operation depending
+			 * on which type of operation is being used.
+			 */
+			if(currentOperation instanceof WFPopOp)
+			{
+				((WFPopOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			else if(currentOperation instanceof WFPushOp)
+			{
+				((WFPushOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			else if(currentOperation instanceof CASPopOp)
+			{
+				((CASPopOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			else if(currentOperation instanceof CASPushOp)
+			{
+				((CASPushOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			else if(currentOperation instanceof WriteOp)
+			{
+				((WriteOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			else if(currentOperation instanceof ShiftOp)
+			{
+				((ShiftOp<T>) currentOperation).helpComplete(threadID);
+			}
+			
+			this.state.compareAndSet(currentOperation, null, COMPLETING, NONE);
+		}
+		
+		return;
+	}
+	
+	public void setOperationRecord(Object operation)
+	{
+		this.state.set(operation, HELP);
+	}
+}
+
+class AnnouncementTable<T>
+{
+	int num_threads;
+	OperationRecord<T> [] announcementTable;
+	
+	@SuppressWarnings("unchecked")
+	AnnouncementTable(int num_threads)
+	{
+		this.num_threads = num_threads;
+		announcementTable = (OperationRecord<T> []) new OperationRecord[num_threads];
+		
+		for(int i = 0; i < this.num_threads; i++)
+		{
+			announcementTable[i] = new OperationRecord<T>();
+		}
+	}
+	
+	public void announceOp(Object operation, int threadID)
+	{
+		announcementTable[threadID].setOperationRecord(operation);
+	}
+	
+	public void checkAnnouncement(int threadID)
+	{
+		for(int i = 0; i < this.num_threads; i++)
+		{
+			if(i != threadID)
+			{
+				announcementTable[i].helpComplete(threadID);
 			}
 		}
 	}
@@ -1477,10 +2040,10 @@ class Vector<T>
 	Node<Integer> NotValue_Elem = new Node<Integer>(NotValue);
 	
 	// Contains the limit of failures when a thread attempts to do an operation.
-	int limit = 100000;
+	int limit = 25000;
 	
-	// Contains the announcements made by threads that have failed to finish executing their operation.
-	AtomicReference<Queue<Object>> announcementTable = new AtomicReference<Queue<Object>>();
+	// Contains operation records if a thread fails to execute operation within a given limit.
+	AnnouncementTable<T> announcementTable;
 	
 	/*
 	 * In the constructor, a boolean value is given to signify which type of
@@ -1488,7 +2051,7 @@ class Vector<T>
 	 * storage with the given capacity and set the current size of the Vector
 	 * to be 0.
 	 */
-	Vector(boolean segmented_contiguous, int capacity)
+	Vector(boolean segmented_contiguous, int capacity, int num_threads)
 	{
 		this.segmented_contiguous = segmented_contiguous;
 		
@@ -1503,8 +2066,19 @@ class Vector<T>
 		}
 		
 		size.set(0);
-		
-		announcementTable.set(new LinkedList<Object>());
+		this.announcementTable = new AnnouncementTable<T>(num_threads);
+	}
+	
+	public void announceOp(Object operation, int threadID)
+	{
+		announcementTable.announceOp(operation, threadID);
+	}
+	
+	// Function that checks if a thread has made an announcement to help complete an operation.
+	public void checkAnnouncement(int threadID)
+	{
+		announcementTable.checkAnnouncement(threadID);
+		return;
 	}
 	
 	/*
@@ -1533,83 +2107,23 @@ class Vector<T>
 	{
 		return conStorage.get().getSpot(pos);
 	}
-	
-	// Function that checks if a thread has made an announcement to help complete an operation.
-	@SuppressWarnings("unchecked")
-	void checkAnnouncement()
-	{
-		/*
-		 * While the announcement table isn't empty, have all threads help
-		 * complete operations by threads that have failed to execute them
-		 * based on the contents of the announcement.
-		 */
-		while(!announcementTable.get().isEmpty())
-		{
-			// Check first that the operation from the head of the queue isn't NULL.
-			Object operation = announcementTable.get().peek();
-			
-			if(operation != null)
-			{
-				
-			}
-			
-			else
-			{
-				break;
-			}
-		}
-		
-		return;
-	}
-	
-	// Make an announcement for a wait-free pop back operation.
-	Return_Elem<T> announceWFPopOp()
-	{
-		return new Return_Elem<T>(false, null);
-	}
-	
-	// Make an announcement for a wait-free push back operation.
-	int announceWFPushOp()
-	{
-		return 0;
-	}
-	
-	// Make an announcement for a compare and set pop back operation.
-	Return_Elem<T> announceCASPopOp()
-	{
-		return new Return_Elem<T>(false, null);
-	}
-	
-	// Make an announcement for a compare and set push back operation.
-	int announceCASPushOp()
-	{
-		return 0;
-	}
-	
-	// Make an announcement for a conditional write operation.
-	Return_Elem<T> announceWriteOp(WriteOp<T> operation)
-	{
-		announcementTable.get().add(operation);
-		return new Return_Elem<T>(false, null);
-	}
-	
-	// Make an announcement for a shift operation.
-	void announceShiftOp(ShiftOp<T> operation)
-	{
-		announcementTable.get().add(operation);
-		return;
-	}
 
 	/*
-	 * Algorithm 6: A wait-free pop back operation that pops the
+	 * Algorithm 6: A wait-free pop_back operation that pops the
 	 * element from the tail of the Vector's internal storage or
 	 * array of elements.
 	 */
 	@SuppressWarnings("unchecked")
-	Return_Elem<T> WF_popBack()
+	Return_Elem<T> WF_popBack(int threadID)
 	{
 		int pos = this.size.get();
 		
+		/*
+		 * Attempt to insert the pop Descriptor object onto the the tail
+		 * of the vector within a given limit. If when completing the pop
+		 * Descriptor object was successful, then the element at the end
+		 * of the vector was successfully popped.
+		 */
 		for(int failures = 0; failures <= limit; failures++)
 		{
 			if(pos == 0)
@@ -1628,7 +2142,7 @@ class Vector<T>
 					
 					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, NotValue_Elem, ph))
 					{
-						boolean res = ph.complete();
+						boolean res = ph.complete(threadID);
 						
 						if(res)
 						{
@@ -1646,7 +2160,7 @@ class Vector<T>
 				
 				else if(expected instanceof Descriptor)
 				{
-					((Descriptor<T>) expected).complete();
+					((Descriptor<T>) expected).complete(threadID);
 				}
 				
 				else
@@ -1666,7 +2180,7 @@ class Vector<T>
 					
 					if(conStorage.get().array.get(spot).compareAndSet(NotValue_Elem, ph, false, false))
 					{
-						boolean res = ph.complete();
+						boolean res = ph.complete(threadID);
 						
 						if(res)
 						{
@@ -1684,7 +2198,7 @@ class Vector<T>
 				
 				else if(expected instanceof Descriptor)
 				{
-					((Descriptor<T>) expected).complete();
+					((Descriptor<T>) expected).complete(threadID);
 				}
 				
 				else
@@ -1694,19 +2208,30 @@ class Vector<T>
 			}
 		}
 		
-		return announceWFPopOp();
+		/*
+		 * If the thread has failed to execute the operation within
+		 * a given limit, announce the operation to other threads to
+		 * get help completing the operation.
+		 */
+		announceOp(new WFPopOp<T>(this), threadID);
+		return new Return_Elem<T>(false, null);
 	}
 	
 	/*
-	 * Algorithm 9: A wait-free push back operation that pushes the
+	 * Algorithm 9: A wait-free push_back operation that pushes the
 	 * given Node value onto the tail of the Vector's internal storage or
 	 * array of elements.
 	 */
 	@SuppressWarnings("unchecked")
-	int WF_pushBack(Node<T> value)
+	int WF_pushBack(Node<T> value, int threadID)
 	{
 		int pos = this.size.get();
 		
+		/*
+		 * Attempt to insert the push Descriptor object at the tail of the vector
+		 * within a given limit. If when completing the Descriptor object was successful
+		 * then the Node value was successfully inserted onto the tail of the vector.
+		 */
 		for(int failures = 0; failures <= limit; failures++)
 		{
 			if(!segmented_contiguous)
@@ -1735,7 +2260,7 @@ class Vector<T>
 					
 					if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
 					{
-						boolean res = ph.complete();
+						boolean res = ph.complete(threadID);
 						
 						if(res)
 						{
@@ -1752,7 +2277,7 @@ class Vector<T>
 				
 				else if(expected instanceof Descriptor)
 				{
-					((Descriptor<T>) expected).complete();
+					((Descriptor<T>) expected).complete(threadID);
 				}
 				
 				else
@@ -1787,7 +2312,7 @@ class Vector<T>
 					
 					if(conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
 					{
-						boolean res = ph.complete();
+						boolean res = ph.complete(threadID);
 						
 						if(res)
 						{
@@ -1804,7 +2329,7 @@ class Vector<T>
 				
 				else if(expected instanceof Descriptor)
 				{
-					((Descriptor<T>) expected).complete();
+					((Descriptor<T>) expected).complete(threadID);
 				}
 				
 				else
@@ -1814,25 +2339,41 @@ class Vector<T>
 			}
 		}
 		
-		return announceWFPushOp();
+		/*
+		 * If the thread has failed to execute the operation within
+		 * a given limit, announce the operation to other threads to
+		 * get help completing the operation.
+		 */
+		announceOp(new WFPushOp<T>(this, value), threadID);
+		return 0;
 	}
 	
 	/*
-	 * Algorithm 11: Compare and Set pop back operation that compares
+	 * Algorithm 11: Compare and Set pop_back operation that compares
 	 * the value at the tail of the Vector's internal storage, and if
 	 * valid, the size of the Vector is decremented and the Node value
 	 * is popped from the Vector's memory.
 	 */
-	Return_Elem<T> CAS_popBack()
+	Return_Elem<T> CAS_popBack(int threadID)
 	{
 		int pos = this.size.get() - 1;
 		int failures = 0;
 		
+		/*
+		 * Within a given a limit, use compareAndSet() operations to pop the
+		 * element at the end of the vector.
+		 */
 		while(true)
 		{
 			if(failures++ > limit)
 			{
-				return announceCASPopOp();
+				/*
+				 * If the thread has failed to execute the operation within
+				 * a given limit, announce the operation to other threads to
+				 * get help completing the operation.
+				 */
+				announceOp(new CASPopOp<T>(this), threadID);
+				return new Return_Elem<T>(false, null);
 			}
 			
 			else if(pos < 0)
@@ -1881,16 +2422,26 @@ class Vector<T>
 	 * valid, the size of the Vector is incremented and the given Node
 	 * value is pushed onto the Vector's memory.
 	 */
-	int CAS_pushBack(Node<T> value)
+	int CAS_pushBack(Node<T> value, int threadID)
 	{
 		int pos = this.size.get();
 		int failures = 0;
 		
+		/*
+		 * Within a given a limit, use compareAndSet() operations to push the
+		 * given value at the tail of the vector.
+		 */
 		while(true)
 		{
 			if(failures++ > limit)
 			{
-				return announceCASPushOp();
+				/*
+				 * If the thread has failed to execute the operation within
+				 * a given limit, announce the operation to other threads to
+				 * get help completing the operation.
+				 */
+				announceOp(new CASPushOp<T>(this, value), threadID);
+				return 0;
 			}
 			
 			if(!segmented_contiguous)
@@ -1994,10 +2545,16 @@ class Vector<T>
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> at(int pos)
 	{
+		// Check first if the given position is within the capacity of the vector.
 		if(pos <= this.getCapacity())
 		{
 			Object value;
 			
+			/*
+			 * Get the value at the given position of the vector. If the value
+			 * at the given position is a Descriptor object, get its original 
+			 * value from the Descriptor.
+			 */
 			if(!segmented_contiguous)
 			{
 				SegSpot spot = getSegSpot(pos);
@@ -2031,12 +2588,20 @@ class Vector<T>
 	 * element given in the function.
 	 */
 	@SuppressWarnings("unchecked")
-	Return_Elem<T> cwrite(int pos, Object old_Elem, Object new_Elem)
+	Return_Elem<T> cwrite(int pos, Object old_Elem, Object new_Elem, int threadID)
 	{
+		// Check first if the given position is within the capacity of the vector.
 		if(pos < this.getCapacity())
 		{
 			Object value;
 			
+			/*
+			 * Attempt to insert the new element onto the given position of the 
+			 * vector if the value within that given position is equal to the given
+			 * old element, within a limit. If the value at the position is not equal
+			 * to the old element, return a Boolean false value and the value at the
+			 * given position of the vector.
+			 */
 			for(int failures = 0; failures < limit; failures++)
 			{
 				if(!segmented_contiguous)
@@ -2046,7 +2611,7 @@ class Vector<T>
 					
 					if(value instanceof Descriptor)
 					{
-						((Descriptor<T>) value).complete();
+						((Descriptor<T>) value).complete(threadID);
 					}
 					
 					else if(value.equals(old_Elem))
@@ -2070,7 +2635,7 @@ class Vector<T>
 					
 					if(value instanceof Descriptor)
 					{
-						((Descriptor<T>) value).complete();
+						((Descriptor<T>) value).complete(threadID);
 					}
 					
 					else if(value.equals(old_Elem))
@@ -2088,7 +2653,12 @@ class Vector<T>
 				}
 			}
 			
-			return announceWriteOp(new WriteOp<T>(this, pos, old_Elem, new_Elem));
+			/*
+			 * If the thread has failed to execute the operation within
+			 * a given limit, announce the operation to other threads to
+			 * get help completing the operation.
+			 */
+			announceOp(new WriteOp<T>(this, pos, old_Elem, new_Elem), threadID);
 		}
 		
 		return new Return_Elem<T>(false, null);
@@ -2100,11 +2670,18 @@ class Vector<T>
 	 * position to the tail of the Vector's internal storage or array of
 	 * elements.
 	 */
-	boolean insertAt(int pos, Node<T> value)
+	boolean insertAt(int pos, Node<T> value, int threadID)
 	{
+		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, false, value);
-		op.complete();
+		op.complete(threadID);
 		
+		/*
+		 * If the operation is completed, replace all the shift Descriptor
+		 * objects with their logic values, increment the size, and return
+		 * a Boolean true value as the shift operation was successful. If
+		 * not, then return a Boolean false value.
+		 */
 		if(!op.incomplete.get())
 		{
 			op.clean();
@@ -2123,11 +2700,18 @@ class Vector<T>
 	 * given position. The elements must be shifted from the tail to the
 	 * position of the Vector's internal storage or array of elements.
 	 */
-	boolean eraseAt(int pos)
+	boolean eraseAt(int pos, int threadID)
 	{
+		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, true, null);
-		op.complete();
+		op.complete(threadID);
 		
+		/*
+		 * If the operation is completed, replace all the shift Descriptor
+		 * objects with their logic values, decrement the size, and return
+		 * a Boolean true value as the shift operation was successful. If
+		 * not, then return a Boolean false value.
+		 */
 		if(!op.incomplete.get())
 		{
 			op.clean();
@@ -2179,14 +2763,20 @@ class VectorThread<T> extends Thread
 	int MP_Cntr = 0;
 	
 	/*
-	 * Counters for each specific operation. Each specific operation's
-	 * ratio is 0.5 out of its operation type's ratio. 
+	 * Counters and ratios for each specific operation.
 	 * 
 	 * For example, if the TO_Ratio is equal to 0.5 and the total number 
 	 * of operations is equal to 10000, then the number of push operations 
 	 * and pop operations used 2500, as the number of tail operation to be
 	 * used is 5000.
 	 */
+	double push_Ratio = 0;
+	double pop_Ratio = 1;
+	double at_Ratio = 0.5;
+	double cw_Ratio = 0.5;
+	double insert_Ratio = 1;
+	double erase_Ratio = 0;
+	
 	int push_Cntr = 0;
 	int pop_Cntr = 0;
 	int at_Cntr = 0;
@@ -2213,8 +2803,14 @@ class VectorThread<T> extends Thread
 		// The thread will use up to the number of operations given to acccess the vector.
 		for(int i = 0; i < num_operations; i++)
 		{
-			// Check if there is currently announcement by 
-			Project_Assignment2.vector.checkAnnouncement();
+			/*
+			 * Check if there is currently an announcement made by another thread
+			 * that it has failed executing its operation and needs help.
+			 */
+			if(i != 0)
+			{
+				Project_Assignment2.vector.checkAnnouncement(threadIndex);
+			}
 			
 			// Get a number of either 1 to 3 from the random number generator.
 			random = (int) (Math.random() * 3) + 1;
@@ -2309,6 +2905,9 @@ class VectorThread<T> extends Thread
 				}
 			}
 		}
+		
+		// Before exiting the thread, check if there are no more announcements made.
+		Project_Assignment2.vector.checkAnnouncement(threadIndex);
 	}
 	
 	// Use either a wait-free pop back or wait-free push back operation on the vector.
@@ -2327,10 +2926,10 @@ class VectorThread<T> extends Thread
 		 */
 		if(random == 0)
 		{
-			if(pop_Cntr <= (num_operations * TO_Ratio * 0.5))
+			if(pop_Ratio != 0 && pop_Cntr <= (num_operations * TO_Ratio * pop_Ratio))
 			{
 				// Pop the Node element at the tail of the vector.
-				Project_Assignment2.vector.WF_popBack();
+				Project_Assignment2.vector.WF_popBack(this.threadIndex);
 				pop_Cntr++;
 			}
 			
@@ -2338,7 +2937,7 @@ class VectorThread<T> extends Thread
 			{
 				// Push a Node element from the thread's list of Nodes onto the tail of the vector.
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Project_Assignment2.vector.WF_pushBack(n);
+				Project_Assignment2.vector.WF_pushBack(n, this.threadIndex);
 				counter++;
 				push_Cntr++;
 			}
@@ -2351,11 +2950,11 @@ class VectorThread<T> extends Thread
 		 */
 		else if(random == 1)
 		{
-			if(push_Cntr <= (num_operations * TO_Ratio * 0.5))
+			if(push_Ratio != 0 && push_Cntr <= (num_operations * TO_Ratio * push_Ratio))
 			{
 				// Push a Node element from the thread's list of Nodes onto the tail of the vector.
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Project_Assignment2.vector.WF_pushBack(n);
+				Project_Assignment2.vector.WF_pushBack(n, this.threadIndex);
 				counter++;
 				push_Cntr++;
 			}
@@ -2363,7 +2962,7 @@ class VectorThread<T> extends Thread
 			else
 			{
 				// Pop the Node element at the tail of the vector.
-				Project_Assignment2.vector.WF_popBack();
+				Project_Assignment2.vector.WF_popBack(this.threadIndex);
 				pop_Cntr++;
 			}
 		}
@@ -2389,7 +2988,7 @@ class VectorThread<T> extends Thread
 		 */
 		if(random == 0)
 		{
-			if(at_Cntr <= (num_operations * RA_Ratio * 0.5))
+			if(at_Ratio != 0 && at_Cntr <= (num_operations * RA_Ratio * at_Ratio))
 			{
 				// Get the element of the vector at the given position.
 				Project_Assignment2.vector.at(random_pos);
@@ -2407,7 +3006,7 @@ class VectorThread<T> extends Thread
 				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos);
 				Object old_Elem = current_Elem.val;
 				
-				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n);
+				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n, this.threadIndex);
 				counter++;
 				
 				cw_Cntr++;
@@ -2421,7 +3020,7 @@ class VectorThread<T> extends Thread
 		 */
 		else if(random == 1)
 		{
-			if(cw_Cntr <= (num_operations * RA_Ratio * 0.5))
+			if(cw_Ratio != 0 && cw_Cntr <= (num_operations * RA_Ratio * cw_Ratio))
 			{
 				/*
 				 * Write a Node element at the given position of the vector using 
@@ -2431,7 +3030,7 @@ class VectorThread<T> extends Thread
 				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos);
 				Object old_Elem = current_Elem.val;
 				
-				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n);
+				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n, this.threadIndex);
 				counter++;
 				
 				cw_Cntr++;
@@ -2457,7 +3056,7 @@ class VectorThread<T> extends Thread
 		int random = rand.nextInt(2);
 		
 		// Get a random position from the vector based on size.
-		int random_pos = (int) (Math.random() * Project_Assignment2.vector.size.get()) + 1;
+		int random_pos = (int) (Math.random() * Project_Assignment2.vector.size.get());
 					
 		/*
 		 * If the number is 0, use an insertAt() operation on the vector if the
@@ -2466,14 +3065,14 @@ class VectorThread<T> extends Thread
 		 */
 		if(random == 0)
 		{
-			if(insert_Cntr <= (num_operations * MP_Ratio * 0.5))
+			if(insert_Ratio != 0 && insert_Cntr <= (num_operations * MP_Ratio * insert_Ratio ))
 			{
 				/*
 				 * Insert a Node element into the vector at the given position
 				 * using a Node from thread's list of Nodes.
 				 */
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Project_Assignment2.vector.insertAt(random_pos, n);
+				Project_Assignment2.vector.insertAt(random_pos, n, this.threadIndex);
 				counter++;
 				
 				insert_Cntr++;
@@ -2482,7 +3081,7 @@ class VectorThread<T> extends Thread
 			else
 			{
 				// Erase the Node element in the vector at the given position.
-				Project_Assignment2.vector.eraseAt(random_pos);
+				Project_Assignment2.vector.eraseAt(random_pos, this.threadIndex);
 				
 				erase_Cntr++;
 			}
@@ -2495,10 +3094,10 @@ class VectorThread<T> extends Thread
 		 */
 		else if(random == 1)
 		{
-			if(erase_Cntr <= (num_operations * MP_Ratio * 0.5))
+			if(erase_Ratio != 0 && erase_Cntr <= (num_operations * MP_Ratio * erase_Ratio))
 			{
 				// Erase the Node element in the vector at the given position.
-				Project_Assignment2.vector.eraseAt(random_pos);
+				Project_Assignment2.vector.eraseAt(random_pos, this.threadIndex);
 				
 				erase_Cntr++;
 			}
@@ -2510,7 +3109,7 @@ class VectorThread<T> extends Thread
 				 * using a Node from thread's list of Nodes.
 				 */
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Project_Assignment2.vector.insertAt(random_pos, n);
+				Project_Assignment2.vector.insertAt(random_pos, n, this.threadIndex);
 				counter++;
 				
 				insert_Cntr++;
@@ -2563,7 +3162,7 @@ public class Project_Assignment2
 			int num_threads = i;
 			
 			// Create a new lock-free stack for each iteration.
-			vector = new Vector<Integer>(segmented_contiguous, capacity);
+			vector = new Vector<Integer>(segmented_contiguous, capacity, i);
 			
 			// Populate the lock-free stack with elements.
 			populate(population);
@@ -2638,7 +3237,7 @@ public class Project_Assignment2
 			int num_threads = i;
 			
 			// Create a new lock-free stack for each iteration.
-			vector = new Vector<Integer>(segmented_contiguous, capacity);
+			vector = new Vector<Integer>(segmented_contiguous, capacity, i);
 			
 			// Populate the lock-free stack with elements.
 			populate(population);

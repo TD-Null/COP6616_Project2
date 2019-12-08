@@ -27,46 +27,23 @@ class Node<T>
 }
 
 /*
- * Contains an element to return a boolean value and a Node
- * elements from certain operations within the vector class.
+ * Contains an element to return a boolean value, a Node
+ * element or position from certain operations within the 
+ * vector class.
  */
 class Return_Elem<T>
 {
 	boolean check;
 	Object val;
+	int position;
 	
 	// Class constructor.
-	Return_Elem(boolean check, Object old_Elem)
+	Return_Elem(boolean check, Object old_Elem, int position)
 	{
 		this.check = check;
 		this.val = old_Elem;
+		this.position = position;
 	}
-}
-
-/*
- * Contains the state of a Descriptor or an operation within 
- * the Vector's elements.
- */
-enum State
-{
-	UNDECIDED,
-	FAILED,
-	PASSED;
-}
-
-/*
- * Contains the type of Descriptor used in the Vector's 
- * elements, being 1) Pop Descriptor, 2) Pop-sub Descriptor, 
- * 3) Push Descriptor, 4) WriteHelper Descriptor, and 5) Shift 
- * Descriptor. 
- */
-enum Descr
-{
-	POP,
-	POPSUB,
-	PUSH,
-	WRITE,
-	SHIFT;
 }
 
 /*
@@ -405,12 +382,12 @@ class PushDescr<T>
 			
 			if(this.state.get().equals(State.PASSED))
 			{
-				current = this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
+				this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.value, false, false);
 			}
 			
 			else
 			{
-				current = this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
+				this.vec.conStorage.get().array.get(spot).compareAndSet(this, this.vec.NotValue_Elem, false, false);
 			}
 		}
 		
@@ -589,123 +566,6 @@ class ShiftDescr<T>
 	}
 }
 
-/*
- * Descriptor Object that contains a type of Descriptor Object used 
- * by the Vector class, including: 1) Pop Descriptor, 2) Pop-sub Descriptor, 
- * 3) Push Descriptor, and 4) Shift Descriptor. The type of Descriptor Object 
- * used will depend on which Constructor is used during the initialization of
- * the Descriptor Object. This class contains a complete() function to complete
- * the operation of the initialized Descriptor Object and a getValue() function
- * to get the Node value currently contained within the Descriptor.
- */
-class Descriptor<T>
-{
-	// Fields containing the Descriptor type and different Descriptor Objects.
-	Descr type;
-	PopDescr<T> pop;
-	PopSubDescr<T> popSub;
-	PushDescr<T> push;
-	WriteHelper<T> write;
-	ShiftDescr<T> shift;
-	
-	// Constructor for a Pop Descriptor.
-	Descriptor(PopDescr<T> pop)
-	{
-		type = Descr.POP;
-		this.pop = pop;
-	}
-	
-	// Constructor for a Pop-sub Descriptor.
-	Descriptor(PopSubDescr<T> popSub)
-	{
-		type = Descr.POPSUB;
-		this.popSub = popSub;
-	}
-	
-	// Constructor for a Push Descriptor.
-	Descriptor(PushDescr<T> push)
-	{
-		type = Descr.PUSH;
-		this.push = push;
-	}
-	
-	// Constructor for a WriteHelper Descriptor.
-	Descriptor(WriteHelper<T> write)
-	{
-		type = Descr.WRITE;
-		this.write = write;
-	}
-	
-	// Constructor for a Shift Descriptor.
-	Descriptor(ShiftDescr<T> shift)
-	{
-		type = Descr.SHIFT;
-		this.shift = shift;
-	}
-
-	// Function that completes the Descriptor Object's operation.
-	boolean complete(int threadID)
-	{
-		if(type == Descr.POP)
-		{
-			return this.pop.complete(threadID);
-		}
-		
-		else if(type == Descr.POPSUB)
-		{
-			return this.popSub.complete();
-		}
-		
-		else if(type == Descr.PUSH)
-		{
-			return this.push.complete(threadID);
-		}
-		
-		else if(type == Descr.WRITE)
-		{
-			return this.write.complete();
-		}
-		
-		else if(type == Descr.SHIFT)
-		{
-			return this.shift.complete(threadID);
-		}
-		
-		return false;
-	}
-	
-	// Function that gets the Node value contained within the Descriptor Object.
-	Object getValue()
-	{
-		if(type == Descr.POP)
-		{
-			return this.pop.vec.NotValue_Elem;
-		}
-		
-		else if(type == Descr.POPSUB)
-		{
-			return this.popSub.value;
-		}
-		
-		else if(type == Descr.PUSH)
-		{
-			return this.push.value;
-		}
-		
-		else if(type == Descr.WRITE)
-		{
-			return this.write.value;
-		}
-		
-		else if(type == Descr.SHIFT)
-		{
-			return this.shift.value;
-		}
-		
-		return null;
-	}
-}
-
 //A wait-free pop back operation announcement.
 class WFPopOp<T>
 {
@@ -719,83 +579,80 @@ class WFPopOp<T>
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> helpComplete(int threadID)
 	{
-		while(true)
+		int pos = this.vec.size.get();
+		
+		if(pos == 0)
 		{
-			int pos = this.vec.size.get();
+			return new Return_Elem<T>(false, null, 0);
+		}
+		
+		if(!this.vec.segmented_contiguous)
+		{
+			SegSpot spot = this.vec.getSegSpot(pos);
+			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
-			if(pos == 0)
+			if(expected.equals(this.vec.NotValue_Elem))
 			{
-				break;
-			}
-			
-			if(!this.vec.segmented_contiguous)
-			{
-				SegSpot spot = this.vec.getSegSpot(pos);
-				Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
 				
-				if(expected.equals(this.vec.NotValue_Elem))
+				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
 				{
-					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
+					boolean res = ph.complete(threadID);
 					
-					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, this.vec.NotValue_Elem, ph))
+					if(res)
 					{
-						boolean res = ph.complete(threadID);
-						
-						if(res)
-						{
-							Object value = ph.pop.child.get();
-							this.vec.size.getAndDecrement();
-							return new Return_Elem<T>(true, value);
-						}
-						
-						else
-						{
-							pos--;
-						}
+						Object value = ph.pop.child.get();
+						this.vec.size.getAndDecrement();
+						return new Return_Elem<T>(true, value, pos);
 					}
-				}
-				
-				else if(expected instanceof Descriptor)
-				{
-					((Descriptor<T>) expected).complete(threadID);
+					
+					else
+					{
+						pos--;
+					}
 				}
 			}
 			
-			else
+			else if(expected instanceof Descriptor)
 			{
-				int spot = this.vec.getConSpot(pos);
-				Object expected = this.vec.conStorage.get().array.get(spot);
-				
-				if(expected.equals(this.vec.NotValue_Elem))
-				{
-					Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
-					
-					if(this.vec.conStorage.get().array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
-					{
-						boolean res = ph.complete(threadID);
-						
-						if(res)
-						{
-							Object value = ((PopSubDescr<T>) ph.pop.child.get()).value;
-							this.vec.size.getAndDecrement();
-							return new Return_Elem<T>(true, value);
-						}
-						
-						else
-						{
-							pos--;
-						}
-					}
-				}
-				
-				else if(expected instanceof Descriptor)
-				{
-					((Descriptor<T>) expected).complete(threadID);
-				}
+				((Descriptor<T>) expected).complete(threadID);
 			}
 		}
 		
-		return new Return_Elem<T>(false, null);
+		else
+		{
+			int spot = this.vec.getConSpot(pos);
+			Object expected = this.vec.conStorage.get().array.get(spot);
+			
+			if(expected.equals(this.vec.NotValue_Elem))
+			{
+				Descriptor<T> ph = new Descriptor<T>(new PopDescr<T>(this.vec, pos));
+				
+				if(this.vec.conStorage.get().array.get(spot).compareAndSet(this.vec.NotValue_Elem, ph, false, false))
+				{
+					boolean res = ph.complete(threadID);
+					
+					if(res)
+					{
+						Object value = ((PopSubDescr<T>) ph.pop.child.get()).value;
+						this.vec.size.getAndDecrement();
+						return new Return_Elem<T>(true, value, pos);
+					}
+					
+					else
+					{
+						pos--;
+					}
+				}
+			}
+			
+			else if(expected instanceof Descriptor)
+			{
+				((Descriptor<T>) expected).complete(threadID);
+			}
+		}
+		
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 }
 
@@ -814,108 +671,107 @@ class WFPushOp<T>
 	@SuppressWarnings("unchecked")
 	int helpComplete(int threadID)
 	{
-		while(true)
+		int pos = this.vec.size.get();
+		
+		if(!this.vec.segmented_contiguous)
 		{
-			int pos = this.vec.size.get();
+			SegSpot spot = this.vec.getSegSpot(pos);
+			Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 			
-			if(!this.vec.segmented_contiguous)
+			if(expected.equals(this.vec.NotValue_Elem))
 			{
-				SegSpot spot = this.vec.getSegSpot(pos);
-				Object expected = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-				
-				if(expected.equals(this.vec.NotValue_Elem))
+				if(pos == 0)
 				{
-					if(pos == 0)
+					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
 					{
-						if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, value))
-						{
-							this.vec.size.getAndIncrement();
-							return 0;
-						}
-						
-						else
-						{
-							pos++;
-							spot = this.vec.getSegSpot(pos);
-						}
+						this.vec.size.getAndIncrement();
+						return 0;
 					}
-				
-					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
 					
-					if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
+					else
 					{
-						boolean res = ph.push.complete(threadID);
-						
-						if(res)
-						{
-							this.vec.size.getAndIncrement();
-							return pos - 1;
-						}
-						
-						else
-						{
-							pos--;
-						}
+						pos++;
+						spot = this.vec.getSegSpot(pos);
 					}
 				}
+			
+				Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
 				
-				else if(expected instanceof Descriptor)
+				if(this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, expected, ph))
 				{
-					((Descriptor<T>) expected).complete(threadID);
+					boolean res = ph.push.complete(threadID);
+					
+					if(res)
+					{
+						this.vec.size.getAndIncrement();
+						return pos - 1;
+					}
+					
+					else
+					{
+						pos--;
+					}
 				}
 			}
 			
-			else
+			else if(expected instanceof Descriptor)
 			{
-				int spot = this.vec.getConSpot(pos);
-				Object expected = this.vec.conStorage.get().array.get(spot);
-				
-				if(expected.equals(this.vec.NotValue_Elem))
-				{
-					if(pos == 0)
-					{
-						if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
-						{
-							this.vec.size.getAndIncrement();
-							return 0;
-						}
-						
-						else
-						{
-							pos++;
-							spot = this.vec.getConSpot(pos);
-						}
-					}
-				
-					Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
-					
-					if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
-					{
-						boolean res = ph.push.complete(threadID);
-						
-						if(res)
-						{
-							this.vec.size.getAndIncrement();
-							return pos - 1;
-						}
-						
-						else
-						{
-							pos--;
-						}
-					}
-				}
-				
-				else if(expected instanceof Descriptor)
-				{
-					((Descriptor<T>) expected).complete(threadID);
-				}
+				((Descriptor<T>) expected).complete(threadID);
 			}
 		}
+		
+		else
+		{
+			int spot = this.vec.getConSpot(pos);
+			Object expected = this.vec.conStorage.get().array.get(spot);
+			
+			if(expected.equals(this.vec.NotValue_Elem))
+			{
+				if(pos == 0)
+				{
+					if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, value, false, false))
+					{
+						this.vec.size.getAndIncrement();
+						return 0;
+					}
+					
+					else
+					{
+						pos++;
+						spot = this.vec.getConSpot(pos);
+					}
+				}
+			
+				Descriptor<T> ph = new Descriptor<T>(new PushDescr<T>(this.vec, pos, value));
+				
+				if(this.vec.conStorage.get().array.get(spot).compareAndSet(expected, ph, false, false))
+				{
+					boolean res = ph.push.complete(threadID);
+					
+					if(res)
+					{
+						this.vec.size.getAndIncrement();
+						return pos - 1;
+					}
+					
+					else
+					{
+						pos--;
+					}
+				}
+			}
+			
+			else if(expected instanceof Descriptor)
+			{
+				((Descriptor<T>) expected).complete(threadID);
+			}
+		}
+		
+		return -1;
 	}
 }
 
-// A compare and set pop_back operation record announcement.
+//A compare and set pop_back operation record announcement.
 class CASPopOp<T>
 {
 	Vector<T> vec;
@@ -927,46 +783,43 @@ class CASPopOp<T>
 	
 	Return_Elem<T> helpComplete(int threadID)
 	{
-		while(true)
+		int pos = this.vec.size.get() - 1;
+		
+		if(pos < 0)
 		{
-			int pos = this.vec.size.get() - 1;
-			
-			if(pos < 0)
+			return new Return_Elem<T>(false, null, pos);
+		}
+		
+		else
+		{
+			if(!this.vec.segmented_contiguous)
 			{
-				break;
+				SegSpot spot = this.vec.getSegSpot(pos);
+				Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+				
+				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
+				{
+					this.vec.size.getAndDecrement();
+					Object value = cur;
+					return new Return_Elem<T>(true, value, pos);
+				}
 			}
 			
 			else
 			{
-				if(!this.vec.segmented_contiguous)
-				{
-					SegSpot spot = this.vec.getSegSpot(pos);
-					Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-					
-					if(!cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, this.vec.NotValue_Elem))
-					{
-						this.vec.size.getAndDecrement();
-						Object value = cur;
-						return new Return_Elem<T>(true, value);
-					}
-				}
+				int spot = this.vec.getConSpot(pos);
+				Object cur = this.vec.conStorage.get().array.get(spot);
 				
-				else
+				if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
 				{
-					int spot = this.vec.getConSpot(pos);
-					Object cur = this.vec.conStorage.get().array.get(spot);
-					
-					if(!cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, this.vec.NotValue_Elem, false, false))
-					{
-						this.vec.size.getAndDecrement();
-						Object value = cur;
-						return new Return_Elem<T>(true, value);
-					}
+					this.vec.size.getAndDecrement();
+					Object value = cur;
+					return new Return_Elem<T>(true, value, pos);
 				}
 			}
 		}
-		
-		return new Return_Elem<T>(false, null);
+	
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 }
 
@@ -984,38 +837,37 @@ class CASPushOp<T>
 	
 	int helpComplete(int threadID)
 	{
-		while(true)
-		{
-			int pos = this.vec.size.get();
-				
-			if(!this.vec.segmented_contiguous)
-			{
-				SegSpot spot = this.vec.getSegSpot(pos);
-				Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
-				
-				if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
-				{
-					this.vec.size.getAndIncrement();
-					return pos;
-				}
-			}
+		int pos = this.vec.size.get();
 			
-			else
+		if(!this.vec.segmented_contiguous)
+		{
+			SegSpot spot = this.vec.getSegSpot(pos);
+			Object cur = this.vec.segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
+			
+			if(cur.equals(this.vec.NotValue_Elem) && this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, cur, value))
 			{
-				int spot = this.vec.getConSpot(pos);
-				Object cur = this.vec.conStorage.get().array.get(spot);
-				
-				if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
-				{
-					this.vec.size.getAndIncrement();
-					return pos;
-				}
+				this.vec.size.getAndIncrement();
+				return pos;
 			}
 		}
+		
+		else
+		{
+			int spot = this.vec.getConSpot(pos);
+			Object cur = this.vec.conStorage.get().array.get(spot);
+			
+			if(cur.equals(this.vec.NotValue_Elem) && this.vec.conStorage.get().array.get(spot).compareAndSet(cur, value, false, false))
+			{
+				this.vec.size.getAndIncrement();
+				return pos;
+			}
+		}
+		
+		return -1;
 	}
 }
 
-// A conditional write operation record announcement.
+//A conditional write operation record announcement.
 class WriteOp<T>
 {
 	/*
@@ -1044,7 +896,7 @@ class WriteOp<T>
 	Return_Elem<T> helpComplete(int threadID)
 	{
 		// Check first that the given position is within the capacity of the vector.
-		while(this.pos < this.vec.getCapacity())
+		if(this.pos < this.vec.getCapacity())
 		{
 			/*
 			 * The conditional write operation will first attempt to insert the write helper
@@ -1078,13 +930,13 @@ class WriteOp<T>
 							if(currentValue.equals(old_Elem))
 							{
 								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, new_Elem);
-								return new Return_Elem<T>(true, old_Elem);
+								return new Return_Elem<T>(true, old_Elem, pos);
 							}
 							
 							else
 							{
 								this.vec.segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, write, currentValue);
-								return new Return_Elem<T>(false, value);
+								return new Return_Elem<T>(false, value, pos);
 							}
 						}
 					}
@@ -1116,13 +968,13 @@ class WriteOp<T>
 							if(currentValue.equals(old_Elem))
 							{
 								this.vec.conStorage.get().array.get(spot).compareAndSet(write, new_Elem, false, false);
-								return new Return_Elem<T>(true, old_Elem);
+								return new Return_Elem<T>(true, old_Elem, pos);
 							}
 							
 							else
 							{
 								this.vec.conStorage.get().array.get(spot).compareAndSet(write, currentValue, false, false);
-								return new Return_Elem<T>(false, value);
+								return new Return_Elem<T>(false, value, pos);
 							}
 						}
 					}
@@ -1130,15 +982,15 @@ class WriteOp<T>
 			}
 		}
 		
-		return new Return_Elem<T>(false, null);
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 }
 
 /*
- * Shift operation that inserts Descriptor objects from the given 
- * position to the end of the vector to shift values based on whether 
- * it was an insertAt() method or an eraseAt() method.
- */
+* Shift operation that inserts Descriptor objects from the given 
+* position to the end of the vector to shift values based on whether 
+* it was an insertAt() method or an eraseAt() method.
+*/
 class ShiftOp<T>
 {
 	/*
@@ -1217,7 +1069,7 @@ class ShiftOp<T>
 				 * a given limit, announce the operation to other threads to
 				 * get help completing the operation.
 				 */
-				this.vec.announceOp(this, threadID);
+				this.vec.announceOp(new Descriptor<T>(this), threadID);
 				return;
 			}
 			
@@ -1320,7 +1172,7 @@ class ShiftOp<T>
 					 * a given limit, announce the operation to other threads to
 					 * get help completing the operation.
 					 */
-					this.vec.announceOp(this, threadID);
+					this.vec.announceOp(new Descriptor<T>(this), threadID);
 					return;
 				}
 				
@@ -1651,110 +1503,257 @@ class ShiftOp<T>
 	}
 }
 
-class OperationRecord<T>
+/*
+ * Descriptor Object that contains a type of Descriptor Object used 
+ * by the Vector class, including: 1) Pop Descriptor, 2) Pop-sub Descriptor, 
+ * 3) Push Descriptor, and 4) Shift Descriptor. The type of Descriptor Object 
+ * used will depend on which Constructor is used during the initialization of
+ * the Descriptor Object. This class contains a complete() function to complete
+ * the operation of the initialized Descriptor Object and a getValue() function
+ * to get the Node value currently contained within the Descriptor.
+ */
+class Descriptor<T>
 {
-	/*
-	 * Contains a state of the operation record. If the state is 1) NONE,
-	 * then there is current no operation recorded from a thread. If the
-	 * state is 2) HELP, then there is an operation announced by a thread
-	 * that
-	 */
-	public static final int NONE = 0, HELP = 1, COMPLETING = 2;
+	// Fields containing the Descriptor type and different Descriptor Objects.
+	Descr type;
+	PopDescr<T> pop;
+	PopSubDescr<T> popSub;
+	PushDescr<T> push;
+	WriteHelper<T> write;
+	ShiftDescr<T> shift;
+	WFPopOp<T> WFPopOp;
+	WFPushOp<T> WFPushOp;
+	CASPopOp<T> CASPopOp;
+	CASPushOp<T> CASPushOp;
+	WriteOp<T> writeOp;
+	ShiftOp<T> shiftOp;
 	
-	// Contains the operation record and its current state.
-	AtomicStampedReference<Object> state;
-	
-	OperationRecord()
+	// Constructor for a Pop Descriptor.
+	Descriptor(PopDescr<T> pop)
 	{
-		this.state = new AtomicStampedReference<Object>(null, 0);
+		type = Descr.POP;
+		this.pop = pop;
 	}
 	
-	@SuppressWarnings("unchecked")
-	public void helpComplete(int threadID)
+	// Constructor for a Pop-sub Descriptor.
+	Descriptor(PopSubDescr<T> popSub)
 	{
-		// First, get the current operation stored within the operation record.
-		Object currentOperation = state.getReference();
-		
-		if(this.state.compareAndSet(currentOperation, currentOperation, HELP, COMPLETING))
+		type = Descr.POPSUB;
+		this.popSub = popSub;
+	}
+	
+	// Constructor for a Push Descriptor.
+	Descriptor(PushDescr<T> push)
+	{
+		type = Descr.PUSH;
+		this.push = push;
+	}
+	
+	// Constructor for a WriteHelper Descriptor.
+	Descriptor(WriteHelper<T> write)
+	{
+		type = Descr.WRITE;
+		this.write = write;
+	}
+	
+	// Constructor for a Shift Descriptor.
+	Descriptor(ShiftDescr<T> shift)
+	{
+		type = Descr.SHIFT;
+		this.shift = shift;
+	}
+	
+	// Constructor for a wait-free pop_back operation.
+	Descriptor(WFPopOp<T> op)
+	{
+		type = Descr.WFPOPOP;
+		this.WFPopOp = op;
+	}
+	
+	// Constructor for a wait-free push_back operation.
+	Descriptor(WFPushOp<T> op)
+	{
+		type = Descr.WFPUSHOP;
+		this.WFPushOp = op;
+	}
+	
+	// Constructor for a compareAndSet() pop_back operation.
+	Descriptor(CASPopOp<T> op)
+	{
+		type = Descr.CASPOPOP;
+		this.CASPopOp = op;
+	}
+	
+	// Constructor for a compareAndSet() push_back operation.
+	Descriptor(CASPushOp<T> op)
+	{
+		type = Descr.CASPUSHOP;
+		this.CASPushOp = op;
+	}
+	
+	// Constructor for a conditional write operation.
+	Descriptor(WriteOp<T> op)
+	{
+		type = Descr.WRITEOP;
+		this.writeOp = op;
+	}
+	
+	// Constructor for a multi-position operation.
+	Descriptor(ShiftOp<T> op)
+	{
+		type = Descr.SHIFTOP;
+		this.shiftOp = op;
+	}
+	
+	// Function that completes the Descriptor Object's operation.
+	boolean complete(int threadID)
+	{
+		if(type == Descr.POP)
 		{
-			/*
-			 * Call the helpComplete() function of the operation depending
-			 * on which type of operation is being used.
-			 */
-			if(currentOperation instanceof WFPopOp)
-			{
-				((WFPopOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			else if(currentOperation instanceof WFPushOp)
-			{
-				((WFPushOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			else if(currentOperation instanceof CASPopOp)
-			{
-				((CASPopOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			else if(currentOperation instanceof CASPushOp)
-			{
-				((CASPushOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			else if(currentOperation instanceof WriteOp)
-			{
-				((WriteOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			else if(currentOperation instanceof ShiftOp)
-			{
-				((ShiftOp<T>) currentOperation).helpComplete(threadID);
-			}
-			
-			this.state.compareAndSet(currentOperation, null, COMPLETING, NONE);
+			return this.pop.complete(threadID);
 		}
 		
-		return;
+		else if(type == Descr.POPSUB)
+		{
+			return this.popSub.complete();
+		}
+		
+		else if(type == Descr.PUSH)
+		{
+			return this.push.complete(threadID);
+		}
+		
+		else if(type == Descr.WRITE)
+		{
+			return this.write.complete();
+		}
+		
+		else if(type == Descr.SHIFT)
+		{
+			return this.shift.complete(threadID);
+		}
+		
+		else if(type == Descr.WFPOPOP)
+		{
+			Return_Elem<T> result = this.WFPopOp.helpComplete(threadID);
+			
+			if(result.position != Integer.MIN_VALUE)
+			{
+				return true;
+			}
+		}
+		
+		else if(type == Descr.WFPUSHOP)
+		{
+			int result = this.WFPushOp.helpComplete(threadID);
+			
+			if(result != -1)
+			{
+				return true;
+			}
+		}
+		
+		else if(type == Descr.CASPOPOP)
+		{
+			Return_Elem<T> result = this.CASPopOp.helpComplete(threadID);
+			
+			if(result.position != Integer.MIN_VALUE)
+			{
+				return true;
+			}
+		}
+		
+		else if(type == Descr.CASPUSHOP)
+		{
+			int result = this.CASPushOp.helpComplete(threadID);
+			
+			if(result != -1)
+			{
+				return true;
+			}
+		}
+		
+		else if(type == Descr.WRITEOP)
+		{
+			Return_Elem<T> result = this.writeOp.helpComplete(threadID);
+			
+			if(result.position != Integer.MIN_VALUE)
+			{
+				return true;
+			}
+		}
+		
+		else if(type == Descr.SHIFTOP)
+		{
+			this.shiftOp.helpComplete(threadID);
+			
+			return true;
+		}
+		
+		return false;
 	}
 	
-	public void setOperationRecord(Object operation)
+	// Function that gets the Node value contained within the Descriptor Object.
+	Object getValue()
 	{
-		this.state.set(operation, HELP);
+		if(type == Descr.POP)
+		{
+			return this.pop.vec.NotValue_Elem;
+		}
+		
+		else if(type == Descr.POPSUB)
+		{
+			return this.popSub.value;
+		}
+		
+		else if(type == Descr.PUSH)
+		{
+			return this.push.value;
+		}
+		
+		else if(type == Descr.WRITE)
+		{
+			return this.write.value;
+		}
+		
+		else if(type == Descr.SHIFT)
+		{
+			return this.shift.value;
+		}
+		
+		return null;
 	}
 }
 
-class AnnouncementTable<T>
+/*
+ * Contains the state of a Descriptor or an operation within 
+ * the Vector's elements.
+ */
+enum State
 {
-	int num_threads;
-	OperationRecord<T> [] announcementTable;
-	
-	@SuppressWarnings("unchecked")
-	AnnouncementTable(int num_threads)
-	{
-		this.num_threads = num_threads;
-		announcementTable = (OperationRecord<T> []) new OperationRecord[num_threads];
-		
-		for(int i = 0; i < this.num_threads; i++)
-		{
-			announcementTable[i] = new OperationRecord<T>();
-		}
-	}
-	
-	public void announceOp(Object operation, int threadID)
-	{
-		announcementTable[threadID].setOperationRecord(operation);
-	}
-	
-	public void checkAnnouncement(int threadID)
-	{
-		for(int i = 0; i < this.num_threads; i++)
-		{
-			if(i != threadID)
-			{
-				announcementTable[i].helpComplete(threadID);
-			}
-		}
-	}
+	UNDECIDED,
+	FAILED,
+	PASSED;
+}
+
+/*
+ * Contains the type of Descriptor used in the Vector's 
+ * elements for all operations, including tail operations,
+ * random access operations, and multi-poisiton operations.
+ */
+enum Descr
+{
+	POP,
+	POPSUB,
+	PUSH,
+	WRITE,
+	SHIFT,
+	WFPOPOP,
+	WFPUSHOP,
+	CASPOPOP,
+	CASPUSHOP,
+	WRITEOP,
+	SHIFTOP;
 }
 
 /*
@@ -2013,6 +2012,42 @@ class Contiguous<T>
 	}
 }
 
+class OPDescr<T>
+{
+	long phase;
+	boolean pending;
+	Descriptor<T> operation;
+	
+	OPDescr(long ph, boolean pend, Descriptor<T> op)
+	{
+		this.phase = ph;
+		this.pending = pend;
+		this.operation = op;
+	}
+}
+
+class HelpRecord
+{
+	int curTID;
+	int num_threads;
+	long lastPhase;
+	long nextCheck;
+	
+	HelpRecord(int num_threads, long ph, long delay)
+	{
+		this.curTID = -1;
+		this.num_threads = num_threads;
+		reset(ph, delay);
+	}
+	
+	public void reset(long ph, long delay)
+	{
+		curTID = (curTID + 1) % this.num_threads;
+		lastPhase = ph;
+		nextCheck = delay;
+	}
+}
+
 /*
  * A wait-free vector class containing an internal storage, being either segmented
  * or contiguous, the current size, and utilizes tail operations, random access 
@@ -2040,10 +2075,16 @@ class Vector<T>
 	Node<Integer> NotValue_Elem = new Node<Integer>(NotValue);
 	
 	// Contains the limit of failures when a thread attempts to do an operation.
-	int limit = 25000;
+	int limit = Integer.MAX_VALUE;
 	
-	// Contains operation records if a thread fails to execute operation within a given limit.
-	AnnouncementTable<T> announcementTable;
+	/*
+	 * Contains fields for an announcement table in the case of when threads need
+	 * help executing an operation using the slow path
+	 */
+	AtomicReferenceArray<OPDescr<T>> state;
+	HelpRecord helpRecords[];
+	AtomicInteger TID;
+	long delay = 500;
 	
 	/*
 	 * In the constructor, a boolean value is given to signify which type of
@@ -2066,19 +2107,74 @@ class Vector<T>
 		}
 		
 		size.set(0);
-		this.announcementTable = new AnnouncementTable<T>(num_threads);
+		
+		this.state = new AtomicReferenceArray<OPDescr<T>>(num_threads);
+		helpRecords = new HelpRecord[num_threads];
+		
+		for(int i = 0; i < state.length(); i++)
+		{
+			state.set(i, new OPDescr<T>(-1, false, null));
+			helpRecords[i] = new HelpRecord(num_threads, state.get(i).phase, delay);
+		}
+		
+		TID = new AtomicInteger(-1);
 	}
 	
-	public void announceOp(Object operation, int threadID)
+	// Functions that announces an operation that needs help executing to other threads.
+	public void announceOp(Descriptor<T> operation, int threadID)
 	{
-		announcementTable.announceOp(operation, threadID);
+		while(true)
+		{
+			if(TID.compareAndSet(-1, threadID))
+			{
+				long phase = state.get(threadID).phase + 1;
+				state.set(threadID, new OPDescr<T>(phase, true, operation));
+				finishOp(operation, threadID);
+				break;
+			}
+		}
 	}
 	
 	// Function that checks if a thread has made an announcement to help complete an operation.
-	public void checkAnnouncement(int threadID)
+	public void checkAnnouncement()
 	{
-		announcementTable.checkAnnouncement(threadID);
+		int threadID = TID.get();
+		
+		if(threadID >= 0)
+		{
+			HelpRecord rec = helpRecords[TID.get()];
+			
+			if(rec.nextCheck-- == 0)
+			{
+				
+			}
+			
+			rec.reset(state.get(threadID).phase, delay);
+		}
+		
+		TID.set(-1);
+		
 		return;
+	}
+	
+	public void finishOp(Descriptor<T> operation, long phase)
+	{
+		int TID = this.TID.get();
+		
+		while(TID != -1 && isStillPending(TID, phase))
+		{
+			if(operation.complete(TID))
+			{
+				
+			}
+			
+			TID = this.TID.get();
+		}
+	}
+	
+	boolean isStillPending(int TID, long ph)
+	{
+		return state.get(TID).pending && state.get(TID).phase <= ph;
 	}
 	
 	/*
@@ -2116,6 +2212,9 @@ class Vector<T>
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> WF_popBack(int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+		
 		int pos = this.size.get();
 		
 		/*
@@ -2128,7 +2227,7 @@ class Vector<T>
 		{
 			if(pos == 0)
 			{
-				return new Return_Elem<T>(false, null);
+				return new Return_Elem<T>(false, null, pos);
 			}
 			
 			if(!segmented_contiguous)
@@ -2148,7 +2247,7 @@ class Vector<T>
 						{
 							Object value = ph.getValue();
 							this.size.getAndDecrement();
-							return new Return_Elem<T>(true, value);
+							return new Return_Elem<T>(true, value, pos);
 						}
 						
 						else
@@ -2186,7 +2285,7 @@ class Vector<T>
 						{
 							Object value = ph.getValue();
 							this.size.getAndDecrement();
-							return new Return_Elem<T>(true, value);
+							return new Return_Elem<T>(true, value, pos);
 						}
 						
 						else
@@ -2213,8 +2312,9 @@ class Vector<T>
 		 * a given limit, announce the operation to other threads to
 		 * get help completing the operation.
 		 */
-		announceOp(new WFPopOp<T>(this), threadID);
-		return new Return_Elem<T>(false, null);
+		announceOp(new Descriptor<T>(new WFPopOp<T>(this)), threadID);
+		
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 	
 	/*
@@ -2225,6 +2325,9 @@ class Vector<T>
 	@SuppressWarnings("unchecked")
 	int WF_pushBack(Node<T> value, int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+				
 		int pos = this.size.get();
 		
 		/*
@@ -2344,7 +2447,8 @@ class Vector<T>
 		 * a given limit, announce the operation to other threads to
 		 * get help completing the operation.
 		 */
-		announceOp(new WFPushOp<T>(this, value), threadID);
+		announceOp(new Descriptor<T>(new WFPushOp<T>(this, value)), threadID);
+		
 		return 0;
 	}
 	
@@ -2356,6 +2460,9 @@ class Vector<T>
 	 */
 	Return_Elem<T> CAS_popBack(int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+		
 		int pos = this.size.get() - 1;
 		int failures = 0;
 		
@@ -2372,13 +2479,14 @@ class Vector<T>
 				 * a given limit, announce the operation to other threads to
 				 * get help completing the operation.
 				 */
-				announceOp(new CASPopOp<T>(this), threadID);
-				return new Return_Elem<T>(false, null);
+				announceOp(new Descriptor<T>(new CASPopOp<T>(this)), threadID);
+				
+				return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 			}
 			
 			else if(pos < 0)
 			{
-				return new Return_Elem<T>(false, null);
+				return new Return_Elem<T>(false, null, pos);
 			}
 			
 			else
@@ -2392,7 +2500,7 @@ class Vector<T>
 					{
 						this.size.getAndDecrement();
 						Object value = cur;
-						return new Return_Elem<T>(true, value);
+						return new Return_Elem<T>(true, value, pos);
 					}
 					
 					pos--;
@@ -2407,7 +2515,7 @@ class Vector<T>
 					{
 						this.size.getAndDecrement();
 						Object value = cur;
-						return new Return_Elem<T>(true, value);
+						return new Return_Elem<T>(true, value, pos);
 					}
 					
 					pos--;
@@ -2424,6 +2532,9 @@ class Vector<T>
 	 */
 	int CAS_pushBack(Node<T> value, int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+				
 		int pos = this.size.get();
 		int failures = 0;
 		
@@ -2440,7 +2551,7 @@ class Vector<T>
 				 * a given limit, announce the operation to other threads to
 				 * get help completing the operation.
 				 */
-				announceOp(new CASPushOp<T>(this, value), threadID);
+				announceOp(new Descriptor<T>(new CASPushOp<T>(this, value)), threadID);
 				return 0;
 			}
 			
@@ -2483,6 +2594,9 @@ class Vector<T>
 	 */
 	Return_Elem<T> FAA_popBack()
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+		
 		int pos = this.size.getAndDecrement() - 1;
 		
 		if(pos >= 0)
@@ -2492,7 +2606,7 @@ class Vector<T>
 				SegSpot spot = getSegSpot(pos);
 				Object value = segStorage.get().segments.get(spot.segIdx).get(spot.itemIdx);
 				segStorage.get().segments.get(spot.segIdx).set(spot.itemIdx, NotValue_Elem);
-				return new Return_Elem<T>(true, value);
+				return new Return_Elem<T>(true, value, pos);
 			}
 			
 			else
@@ -2500,12 +2614,12 @@ class Vector<T>
 				int spot = getConSpot(pos);
 				Object value = conStorage.get().array.get(spot).getReference();
 				conStorage.get().array.get(spot).set(NotValue_Elem, false);
-				return new Return_Elem<T>(true, value);
+				return new Return_Elem<T>(true, value, pos);
 			}
 		}
 		
 		this.size.getAndIncrement();
-		return new Return_Elem<T>(false, null);
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 	
 	/*
@@ -2517,6 +2631,9 @@ class Vector<T>
 	 */
 	int FAA_pushBack(Node<T> value)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+		
 		int pos = this.size.getAndIncrement();
 		
 		if(!segmented_contiguous)
@@ -2545,6 +2662,9 @@ class Vector<T>
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> at(int pos)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+		
 		// Check first if the given position is within the capacity of the vector.
 		if(pos <= this.getCapacity())
 		{
@@ -2574,11 +2694,11 @@ class Vector<T>
 			
 			if(!value.equals(NotValue_Elem))
 			{
-				return new Return_Elem<T>(true, value);
+				return new Return_Elem<T>(true, value, pos);
 			}
 		}
 		
-		return new Return_Elem<T>(false, null);
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 	
 	/*
@@ -2618,13 +2738,13 @@ class Vector<T>
 					{
 						if(segStorage.get().segments.get(spot.segIdx).compareAndSet(spot.itemIdx, value, new_Elem))
 						{
-							return new Return_Elem<T>(true, old_Elem);
+							return new Return_Elem<T>(true, old_Elem, pos);
 						}
 					}
 					
 					else
 					{
-						return new Return_Elem<T>(false, value);
+						return new Return_Elem<T>(false, value, pos);
 					}
 				}
 				
@@ -2642,13 +2762,13 @@ class Vector<T>
 					{
 						if(conStorage.get().array.get(spot).compareAndSet(value, new_Elem, false, false))
 						{
-							return new Return_Elem<T>(true, old_Elem);
+							return new Return_Elem<T>(true, old_Elem, pos);
 						}
 					}
 					
 					else
 					{
-						return new Return_Elem<T>(false, value);
+						return new Return_Elem<T>(false, value, pos);
 					}
 				}
 			}
@@ -2658,10 +2778,10 @@ class Vector<T>
 			 * a given limit, announce the operation to other threads to
 			 * get help completing the operation.
 			 */
-			announceOp(new WriteOp<T>(this, pos, old_Elem, new_Elem), threadID);
+			announceOp(new Descriptor<T>(new WriteOp<T>(this, pos, old_Elem, new_Elem)), threadID);
 		}
 		
-		return new Return_Elem<T>(false, null);
+		return new Return_Elem<T>(false, null, Integer.MIN_VALUE);
 	}
 	
 	/*
@@ -2672,6 +2792,9 @@ class Vector<T>
 	 */
 	boolean insertAt(int pos, Node<T> value, int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+				
 		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, false, value);
 		op.complete(threadID);
@@ -2702,6 +2825,9 @@ class Vector<T>
 	 */
 	boolean eraseAt(int pos, int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement();
+				
 		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, true, null);
 		op.complete(threadID);
@@ -2803,15 +2929,6 @@ class VectorThread<T> extends Thread
 		// The thread will use up to the number of operations given to acccess the vector.
 		for(int i = 0; i < num_operations; i++)
 		{
-			/*
-			 * Check if there is currently an announcement made by another thread
-			 * that it has failed executing its operation and needs help.
-			 */
-			if(i != 0)
-			{
-				Project_Assignment2.vector.checkAnnouncement(threadIndex);
-			}
-			
 			// Get a number of either 1 to 3 from the random number generator.
 			random = (int) (Math.random() * 3) + 1;
 			
@@ -2905,9 +3022,6 @@ class VectorThread<T> extends Thread
 				}
 			}
 		}
-		
-		// Before exiting the thread, check if there are no more announcements made.
-		Project_Assignment2.vector.checkAnnouncement(threadIndex);
 	}
 	
 	// Use either a wait-free pop back or wait-free push back operation on the vector.
@@ -3117,11 +3231,10 @@ class VectorThread<T> extends Thread
 		}
 	}
 }
-
 public class Project_Assignment2 
 {
 	// Contains the maximum numbers of threads to use to test the wait-free vector.
-	public static int max_threads = 32;
+	public static int max_threads = 16;
 	
 	// Contains a list of Nodes pre-allocated for each thread using during multithreading when accessing the stack.
 	public static ArrayList<ArrayList<Node<Integer>>> threadNodes = new ArrayList<ArrayList<Node<Integer>>>(max_threads);

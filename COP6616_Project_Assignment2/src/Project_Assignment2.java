@@ -9,6 +9,11 @@ import java.util.*;
 import java.util.concurrent.atomic.*;
 import java.lang.*;
 
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
+import java.lang.*;
+
 /*
  * A Node class used in the Vector class to represent the
  * elements within the memory storage. Contains a Generic
@@ -566,9 +571,10 @@ class ShiftDescr<T>
 	}
 }
 
-//A wait-free pop back operation announcement.
+// A wait-free pop back operation announcement.
 class WFPopOp<T>
 {
+	// The pop back operation contains a field of a reference to the vector it will access.
 	Vector<T> vec;
 	
 	WFPopOp(Vector<T> vec)
@@ -576,6 +582,10 @@ class WFPopOp<T>
 		this.vec = vec;
 	}
 	
+	/*
+	 * The wait-free pop back operation announcement has the same functionality 
+	 * as its own original operation without a failure counter.
+	 */
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> helpComplete(int threadID)
 	{
@@ -656,9 +666,13 @@ class WFPopOp<T>
 	}
 }
 
-//A wait-free push back operation announcement.
+// A wait-free push back operation announcement.
 class WFPushOp<T>
 {
+	/*
+	 * The push back operation contains a field of a reference to the vector 
+	 * it will access and the Node value it will push to the vector's tail.
+	 */
 	Vector<T> vec;
 	Node<T> value;
 	
@@ -668,6 +682,10 @@ class WFPushOp<T>
 		this.value = value;
 	}
 	
+	/*
+	 * The wait-free push back operation announcement has the same functionality 
+	 * as its own original operation without a failure counter.
+	 */
 	@SuppressWarnings("unchecked")
 	int helpComplete(int threadID)
 	{
@@ -771,9 +789,10 @@ class WFPushOp<T>
 	}
 }
 
-//A compare and set pop_back operation record announcement.
+// A compare and set pop_back operation record announcement.
 class CASPopOp<T>
 {
+	// The pop back operation contains a field of a reference to the vector it will access.
 	Vector<T> vec;
 	
 	CASPopOp(Vector<T> vec)
@@ -781,6 +800,10 @@ class CASPopOp<T>
 		this.vec = vec;
 	}
 	
+	/*
+	 * The wait-free pop back operation announcement has the same functionality 
+	 * as its own original operation without a failure counter.
+	 */
 	Return_Elem<T> helpComplete(int threadID)
 	{
 		int pos = this.vec.size.get() - 1;
@@ -823,9 +846,13 @@ class CASPopOp<T>
 	}
 }
 
-//A compare and set push back operation announcement.
+// A compare and set push back operation announcement.
 class CASPushOp<T>
 {
+	/*
+	 * The push back operation contains a field of a reference to the vector 
+	 * it will access and the Node value it will push to the vector's tail.
+	 */
 	Vector<T> vec;
 	Node<T> value;
 	
@@ -835,6 +862,10 @@ class CASPushOp<T>
 		this.value = value;
 	}
 	
+	/*
+	 * The wait-free push back operation announcement has the same functionality 
+	 * as its own original operation without a failure counter.
+	 */
 	int helpComplete(int threadID)
 	{
 		int pos = this.vec.size.get();
@@ -2012,8 +2043,20 @@ class Contiguous<T>
 	}
 }
 
+/*
+ * Class that contains the announce operation record. Each
+ * thread will have its own operation record as an Atomic
+ * reference, that will contain a Descriptor object containing
+ * the operation that needs to be completed.
+ */
 class OPDescr<T>
 {
+	/*
+	 * The operation contains fields of its thread's current phase
+	 * number, a Boolean pendng variable to signify if there is
+	 * currently a pending operation needed to be completed, and
+	 * a reference to the Descriptor object that needs to be completed.
+	 */
 	long phase;
 	boolean pending;
 	Descriptor<T> operation;
@@ -2026,8 +2069,19 @@ class OPDescr<T>
 	}
 }
 
+/*
+ * Class that contains the current thread's help record for 
+ * completing an operation. Each thread will first have a
+ * delay before checking for the announced operation and
+ * a phase number of its last announce operation.
+ */
 class HelpRecord
 {
+	/*
+	 * The help record contains fields of the thread ID, the number of threads,
+	 * the last phase of an announced operation, and the delay in checking for
+	 * an announced operation.
+	 */
 	int curTID;
 	int num_threads;
 	long lastPhase;
@@ -2075,15 +2129,15 @@ class Vector<T>
 	Node<Integer> NotValue_Elem = new Node<Integer>(NotValue);
 	
 	// Contains the limit of failures when a thread attempts to do an operation.
-	int limit = Integer.MAX_VALUE;
+	int limit = 100000;
 	
 	/*
 	 * Contains fields for an announcement table in the case of when threads need
-	 * help executing an operation using the slow path
+	 * help executing an operation using the slow path. Also contains
 	 */
 	AtomicReferenceArray<OPDescr<T>> state;
 	HelpRecord helpRecords[];
-	AtomicInteger TID;
+	AtomicInteger curTID;
 	long delay = 500;
 	
 	/*
@@ -2117,7 +2171,7 @@ class Vector<T>
 			helpRecords[i] = new HelpRecord(num_threads, state.get(i).phase, delay);
 		}
 		
-		TID = new AtomicInteger(-1);
+		curTID = new AtomicInteger(-1);
 	}
 	
 	// Functions that announces an operation that needs help executing to other threads.
@@ -2125,53 +2179,64 @@ class Vector<T>
 	{
 		while(true)
 		{
-			if(TID.compareAndSet(-1, threadID))
+			if(this.curTID.compareAndSet(-1, threadID))
 			{
 				long phase = state.get(threadID).phase + 1;
 				state.set(threadID, new OPDescr<T>(phase, true, operation));
-				finishOp(operation, threadID);
+				finishOp(phase, threadID);
 				break;
 			}
 		}
 	}
 	
 	// Function that checks if a thread has made an announcement to help complete an operation.
-	public void checkAnnouncement()
+	public void checkAnnouncement(int threadID)
 	{
-		int threadID = TID.get();
+		int currentTID = curTID.get();
 		
-		if(threadID >= 0)
+		if(currentTID >= 0)
 		{
-			HelpRecord rec = helpRecords[TID.get()];
+			HelpRecord rec = helpRecords[threadID];
 			
 			if(rec.nextCheck-- == 0)
 			{
+				OPDescr<T> desc = state.get(currentTID);
 				
+				if(desc.pending && desc.phase == rec.lastPhase)
+				{
+					finishOp(rec.lastPhase, currentTID);
+				}
 			}
 			
-			rec.reset(state.get(threadID).phase, delay);
+			rec.reset(state.get(currentTID).phase, delay);
 		}
-		
-		TID.set(-1);
 		
 		return;
 	}
 	
-	public void finishOp(Descriptor<T> operation, long phase)
+	// Function that finishes the operation record announced.
+	public void finishOp(long phase, int threadID)
 	{
-		int TID = this.TID.get();
-		
-		while(TID != -1 && isStillPending(TID, phase))
+		while(isStillPending(threadID, phase))
 		{
-			if(operation.complete(TID))
+			OPDescr<T> currDescr = state.get(threadID);
+			
+			if(currDescr.operation == null)
 			{
-				
+				break;
 			}
 			
-			TID = this.TID.get();
+			else if(currDescr.operation.complete(threadID))
+			{
+				OPDescr<T> newDescr = new OPDescr<T>(state.get(threadID).phase, false, null);
+				state.compareAndSet(threadID, currDescr, newDescr);
+				this.curTID.compareAndSet(threadID, -1);
+				break;
+			}
 		}
 	}
 	
+	// Function that checks if the current announced operation is still pending.
 	boolean isStillPending(int TID, long ph)
 	{
 		return state.get(TID).pending && state.get(TID).phase <= ph;
@@ -2190,6 +2255,26 @@ class Vector<T>
 		}
 
 		return conStorage.get().capacity;
+	}
+	
+	// Function used to populate the vector with Nodes using the FAA push_back operation.
+	void populate(Node<T> value)
+	{
+		int pos = this.size.getAndIncrement();
+		
+		if(!segmented_contiguous)
+		{
+			SegSpot spot = getSegSpot(pos);
+			segStorage.get().segments.get(spot.segIdx).set(spot.itemIdx, value);
+		}
+		
+		else
+		{
+			int spot = getConSpot(pos);
+			conStorage.get().array.get(spot).set(value, false);
+		}
+		
+		return;
 	}
 	
 	// Gets the position of an element within a Segmented Element Model.
@@ -2213,7 +2298,7 @@ class Vector<T>
 	Return_Elem<T> WF_popBack(int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 		
 		int pos = this.size.get();
 		
@@ -2326,7 +2411,7 @@ class Vector<T>
 	int WF_pushBack(Node<T> value, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 				
 		int pos = this.size.get();
 		
@@ -2449,7 +2534,7 @@ class Vector<T>
 		 */
 		announceOp(new Descriptor<T>(new WFPushOp<T>(this, value)), threadID);
 		
-		return 0;
+		return -1;
 	}
 	
 	/*
@@ -2461,7 +2546,7 @@ class Vector<T>
 	Return_Elem<T> CAS_popBack(int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 		
 		int pos = this.size.get() - 1;
 		int failures = 0;
@@ -2533,7 +2618,7 @@ class Vector<T>
 	int CAS_pushBack(Node<T> value, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 				
 		int pos = this.size.get();
 		int failures = 0;
@@ -2552,7 +2637,8 @@ class Vector<T>
 				 * get help completing the operation.
 				 */
 				announceOp(new Descriptor<T>(new CASPushOp<T>(this, value)), threadID);
-				return 0;
+				
+				return -1;
 			}
 			
 			if(!segmented_contiguous)
@@ -2592,10 +2678,10 @@ class Vector<T>
 	 * the position and popping the Node value at the position then
 	 * decrementing the overall size of the Vector.
 	 */
-	Return_Elem<T> FAA_popBack()
+	Return_Elem<T> FAA_popBack(int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 		
 		int pos = this.size.getAndDecrement() - 1;
 		
@@ -2629,10 +2715,10 @@ class Vector<T>
 	 * the position and pushing the Node value at the position then
 	 * incrementing the overall size of the Vector.
 	 */
-	int FAA_pushBack(Node<T> value)
+	int FAA_pushBack(Node<T> value, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 		
 		int pos = this.size.getAndIncrement();
 		
@@ -2660,10 +2746,10 @@ class Vector<T>
 	 * Else, return false and NULL.
 	 */
 	@SuppressWarnings("unchecked")
-	Return_Elem<T> at(int pos)
+	Return_Elem<T> at(int pos, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 		
 		// Check first if the given position is within the capacity of the vector.
 		if(pos <= this.getCapacity())
@@ -2710,6 +2796,9 @@ class Vector<T>
 	@SuppressWarnings("unchecked")
 	Return_Elem<T> cwrite(int pos, Object old_Elem, Object new_Elem, int threadID)
 	{
+		// First, check if an announcement has been made by another thread.
+		checkAnnouncement(threadID);
+		
 		// Check first if the given position is within the capacity of the vector.
 		if(pos < this.getCapacity())
 		{
@@ -2793,7 +2882,7 @@ class Vector<T>
 	boolean insertAt(int pos, Node<T> value, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 				
 		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, false, value);
@@ -2826,7 +2915,7 @@ class Vector<T>
 	boolean eraseAt(int pos, int threadID)
 	{
 		// First, check if an announcement has been made by another thread.
-		checkAnnouncement();
+		checkAnnouncement(threadID);
 				
 		// Complete the shift operation.
 		ShiftOp<T> op = new ShiftOp<T>(this, pos, true, null);
@@ -2898,8 +2987,8 @@ class VectorThread<T> extends Thread
 	 */
 	double push_Ratio = 0;
 	double pop_Ratio = 1;
-	double at_Ratio = 0.5;
-	double cw_Ratio = 0.5;
+	double at_Ratio = 1;
+	double cw_Ratio = 0;
 	double insert_Ratio = 1;
 	double erase_Ratio = 0;
 	
@@ -3105,7 +3194,7 @@ class VectorThread<T> extends Thread
 			if(at_Ratio != 0 && at_Cntr <= (num_operations * RA_Ratio * at_Ratio))
 			{
 				// Get the element of the vector at the given position.
-				Project_Assignment2.vector.at(random_pos);
+				Project_Assignment2.vector.at(random_pos, this.threadIndex);
 				
 				at_Cntr++;
 			}
@@ -3117,7 +3206,7 @@ class VectorThread<T> extends Thread
 				 * a conditional write with a Node from thread's list of Nodes.
 				 */
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos);
+				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos, this.threadIndex);
 				Object old_Elem = current_Elem.val;
 				
 				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n, this.threadIndex);
@@ -3141,7 +3230,7 @@ class VectorThread<T> extends Thread
 				 * a conditional write with a Node from thread's list of Nodes.
 				 */
 				Node<Integer> n = Project_Assignment2.threadNodes.get(threadIndex).get(counter);
-				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos);
+				Return_Elem<T> current_Elem = (Return_Elem<T>) Project_Assignment2.vector.at(random_pos, this.threadIndex);
 				Object old_Elem = current_Elem.val;
 				
 				Project_Assignment2.vector.cwrite(random_pos, old_Elem, n, this.threadIndex);
@@ -3153,7 +3242,7 @@ class VectorThread<T> extends Thread
 			else
 			{
 				// Get the element of the vector at the given position.
-				Project_Assignment2.vector.at(random_pos);
+				Project_Assignment2.vector.at(random_pos, this.threadIndex);
 				
 				at_Cntr++;
 			}
@@ -3231,6 +3320,7 @@ class VectorThread<T> extends Thread
 		}
 	}
 }
+
 public class Project_Assignment2 
 {
 	// Contains the maximum numbers of threads to use to test the wait-free vector.
@@ -3415,7 +3505,7 @@ public class Project_Assignment2
 		for(int i = 0; i < x; i++)
 		{
 			Node<Integer> new_Node = new Node<Integer>(i);
-			vector.FAA_pushBack(new_Node);
+			vector.populate(new_Node);
 		}
 	}
 	
